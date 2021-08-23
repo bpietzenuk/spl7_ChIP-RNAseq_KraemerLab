@@ -1,0 +1,231 @@
+---
+title: "Intagrative Analysis of spl7-targets using ChIP & RNAseq"
+author: "Pietzenuk"
+date: "7/28/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load data
+
+```{r}
+ChIP_plus_raw <- read.delim("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Integrative_Analysis_CHiP_RNAseq/plus.merged.bed.associated.annotated.edit.txt",header = T )
+ChIP_plus <- ChIP_plus_raw[c(1:8)]
+head(ChIP_plus)
+nrow(ChIP_plus)
+ChIP_minus_raw <- read.delim("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Integrative_Analysis_CHiP_RNAseq/minus.merged.bed.associated.annotated.edited.txt",header = T )
+ChIP_minus <- ChIP_minus_raw[c(1:8)]
+nrow(ChIP_minus)
+head(ChIP_minus)
+
+ChIP_Intersect <- read.delim("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Integrative_Analysis_CHiP_RNAseq/l2FC05/ChIP_intersect_peak(final).txt",header = T )
+nrow(ChIP_Intersect)
+head(ChIP_Intersect)
+
+####RNAseq_spl7_dependent
+##Standard
+spl7dependent_up_compared <- read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/spl7dependent/under +Cu not changing under -Cu/new/Standard_up_Comparisonl2FC05_Bernal.txt",header = T )
+head(spl7dependent_up_compared)
+nrow(spl7dependent_up_compared)
+spl7dependent_dwn_compared <- read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/spl7dependent/under +Cu not changing under -Cu/new/Standard_dwn_Comparisonl2FC05_Bernal.txt",header = T )
+head(spl7dependent_dwn_compared)
+nrow(spl7dependent_dwn_compared)
+
+spl7_induced_not_CuDependent <- read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/spl7dependent/under +Cu not changing under -Cu/new/spl7_CuIndependent_uncorrected.txt",header = T )
+head(spl7_induced_not_CuDependent)
+nrow(spl7_induced_not_CuDependent)
+spl7_repressed_not_CuDependent <- read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/spl7dependent/under +Cu not changing under -Cu/new/spl7_CuIndependent_Uncorrected_Repressed.txt",header = T )
+head(spl7_repressed_not_CuDependent)
+nrow(spl7_repressed_not_CuDependent)
+
+spl7_induced_not_CuDependent_corrected <- read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/spl7dependent/under +Cu not changing under -Cu/new/spl7_CuIndependent_corrected.txt",header = T )
+head(spl7_induced_not_CuDependent_corrected)
+nrow(spl7_induced_not_CuDependent_corrected)
+spl7_repressed_not_CuDependent_corrected <- read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/spl7dependent/under +Cu not changing under -Cu/new/spl7_CuIndependent_Corrected_Repressed.txt",header = T )
+head(spl7_repressed_not_CuDependent_corrected)
+nrow(spl7_repressed_not_CuDependent_corrected)
+```
+
+## Deleting values from controlCopper samples 
+
+```{r}
+WT_Cu <- read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/l2fc0.5/normal_analysis/Wildtype_without_Copper_vs_Wildtype_with_Copper.txt")
+WT_Cu$AGI <- row.names(WT_Cu)
+WT_Cu <- data.frame(WT_Cu$AGI, WT_Cu$log2FoldChange, WT_Cu$lfcSE, WT_Cu$padj)
+head(WT_Cu)
+
+MTWT_woCu <- read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/l2fc0.5/normal_analysis/Mutant_without_Copper_vs_Wildtype_without_Copper.txt")
+MTWT_woCu$AGI <- row.names(MTWT_woCu)
+MTWT_woCu <- data.frame(MTWT_woCu$AGI, MTWT_woCu$log2FoldChange, MTWT_woCu$lfcSE, MTWT_woCu$padj)
+head(MTWT_woCu)
+
+#####Ute Method conditions
+MT_Cu <- read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/l2fc0.5/normal_analysis/Mutant_without_Copper_vs_Mutant_with_Copper.txt")
+MT_Cu$AGI <- row.names(MT_Cu)
+MT_Cu <- data.frame(MT_Cu$AGI, MT_Cu$log2FoldChange, MT_Cu$lfcSE, MT_Cu$padj)
+head(MT_Cu)
+
+###Additional last comparison
+MTWT_wCu <- read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/l2fc0.5/normal_analysis/Mutant_with_Copper_vs_Wildtype_with_Copper.txt")
+MTWT_wCu$AGI <- row.names(MTWT_wCu)
+MTWT_wCu <- data.frame(MTWT_wCu$AGI, MTWT_wCu$log2FoldChange, MTWT_wCu$lfcSE, MTWT_wCu$padj)
+head(MTWT_wCu)
+
+##low Cu expressed
+spl7dependent_up_compared <- merge(spl7dependent_up_compared, WT_Cu, all.x = T, by.x = "AGI", by.y = "WT_Cu.AGI")
+spl7dependent_up_compared <- merge(spl7dependent_up_compared, MTWT_woCu, all.x = T, by.x = "AGI", by.y = "MTWT_woCu.AGI")
+spl7dependent_up_compared <- merge(spl7dependent_up_compared, MT_Cu, all.x = T, by.x = "AGI", by.y = "MT_Cu.AGI")
+spl7dependent_up_compared <- merge(spl7dependent_up_compared, MTWT_wCu, all.x = T, by.x = "AGI", by.y = "MTWT_wCu.AGI")
+head(spl7_induced_not_CuDependent)
+
+spl7dependent_dwn_compared <- merge(spl7dependent_dwn_compared, WT_Cu, all.x = T, by.x = "AGI", by.y = "WT_Cu.AGI")
+spl7dependent_dwn_compared <- merge(spl7dependent_dwn_compared, MTWT_woCu, all.x = T, by.x = "AGI", by.y = "MTWT_woCu.AGI")
+spl7dependent_dwn_compared <- merge(spl7dependent_dwn_compared, MT_Cu, all.x = T, by.x = "AGI", by.y = "MT_Cu.AGI")
+spl7dependent_dwn_compared <- merge(spl7dependent_dwn_compared, MTWT_wCu, all.x = T, by.x = "AGI", by.y = "MTWT_wCu.AGI")
+head(spl7dependent_dwn_compared)
+
+###Copper independent
+spl7_induced_not_CuDependent <- merge(spl7_induced_not_CuDependent, WT_Cu, all.x = T, by.x = "AGI", by.y = "WT_Cu.AGI")
+spl7_induced_not_CuDependent <- merge(spl7_induced_not_CuDependent, MTWT_woCu, all.x = T, by.x = "AGI", by.y = "MTWT_woCu.AGI")
+spl7_induced_not_CuDependent <- merge(spl7_induced_not_CuDependent, MT_Cu, all.x = T, by.x = "AGI", by.y = "MT_Cu.AGI")
+spl7_induced_not_CuDependent <- merge(spl7_induced_not_CuDependent, MTWT_wCu, all.x = T, by.x = "AGI", by.y = "MTWT_wCu.AGI")
+head(spl7_induced_not_CuDependent)
+
+spl7_repressed_not_CuDependent <- merge(spl7_repressed_not_CuDependent, WT_Cu, all.x = T, by.x = "AGI", by.y = "WT_Cu.AGI")
+spl7_repressed_not_CuDependent <- merge(spl7_repressed_not_CuDependent, MTWT_woCu, all.x = T, by.x = "AGI", by.y = "MTWT_woCu.AGI")
+spl7_repressed_not_CuDependent <- merge(spl7_repressed_not_CuDependent, MT_Cu, all.x = T, by.x = "AGI", by.y = "MT_Cu.AGI")
+spl7_repressed_not_CuDependent <- merge(spl7_repressed_not_CuDependent, MTWT_wCu, all.x = T, by.x = "AGI", by.y = "MTWT_wCu.AGI")
+head(spl7_repressed_not_CuDependent)
+
+spl7_induced_not_CuDependent_corrected <- merge(spl7_induced_not_CuDependent_corrected, WT_Cu, all.x = T, by.x = "AGI", by.y = "WT_Cu.AGI")
+spl7_induced_not_CuDependent_corrected <- merge(spl7_induced_not_CuDependent_corrected, MTWT_woCu, all.x = T, by.x = "AGI", by.y = "MTWT_woCu.AGI")
+spl7_induced_not_CuDependent_corrected <- merge(spl7_induced_not_CuDependent_corrected, MT_Cu, all.x = T, by.x = "AGI", by.y = "MT_Cu.AGI")
+spl7_induced_not_CuDependent_corrected <- merge(spl7_induced_not_CuDependent_corrected, MTWT_wCu, all.x = T, by.x = "AGI", by.y = "MTWT_wCu.AGI")
+head(spl7_induced_not_CuDependent_corrected)
+
+spl7_repressed_not_CuDependent_corrected <- merge(spl7_repressed_not_CuDependent_corrected, WT_Cu, all.x = T, by.x = "AGI", by.y = "WT_Cu.AGI")
+spl7_repressed_not_CuDependent_corrected <- merge(spl7_repressed_not_CuDependent_corrected, MTWT_woCu, all.x = T, by.x = "AGI", by.y = "MTWT_woCu.AGI")
+spl7_repressed_not_CuDependent_corrected <- merge(spl7_repressed_not_CuDependent_corrected, MT_Cu, all.x = T, by.x = "AGI", by.y = "MT_Cu.AGI")
+spl7_repressed_not_CuDependent_corrected <- merge(spl7_repressed_not_CuDependent_corrected, MTWT_wCu, all.x = T, by.x = "AGI", by.y = "MTWT_wCu.AGI")
+head(spl7_repressed_not_CuDependent_corrected)
+
+
+```
+
+## Merge ChIP and RNAseq datasets
+
+```{r}
+#####Merging SPL7_dependent with ChIPseq
+spl7dependent_up_compared_ChIPCuPlus <- merge(spl7dependent_up_compared, ChIP_plus, by.x = "AGI", by.y = "gene.name")
+spl7dependent_up_compared_ChIPCuMinus <- merge(spl7dependent_up_compared, ChIP_minus, by.x = "AGI", by.y = "gene.name")
+spl7dependent_up_compared_ChIPCuIntersect <- merge(spl7dependent_up_compared, ChIP_Intersect, by.x = "AGI", by.y = "gene.name")
+
+spl7dependent_dwn_compared_ChIPCuPlus <- merge(spl7dependent_dwn_compared, ChIP_plus, by.x = "AGI", by.y = "gene.name")
+spl7dependent_dwn_compared_ChIPCuMinus <- merge(spl7dependent_dwn_compared, ChIP_minus, by.x = "AGI", by.y = "gene.name")
+spl7dependent_dwn_compared_ChIPCuIntersect <- merge(spl7dependent_dwn_compared, ChIP_Intersect, by.x = "AGI", by.y = "gene.name")
+
+#######spl7_induced_Cuindependent
+spl7_induced_not_CuDependent_ChIPCuPlus <- merge(spl7_induced_not_CuDependent, ChIP_plus, by.x = "AGI", by.y = "gene.name")
+spl7_induced_not_CuDependent_ChIPCuMinus <- merge(spl7_induced_not_CuDependent, ChIP_minus, by.x = "AGI", by.y = "gene.name")
+spl7_induced_not_CuDependent_ChIPCuIntersect <- merge(spl7_induced_not_CuDependent, ChIP_Intersect, by.x = "AGI", by.y = "gene.name")
+
+spl7_induced_not_CuDependent_corrected_ChIPCuPlus <- merge(spl7_induced_not_CuDependent_corrected, ChIP_plus, by.x = "AGI", by.y = "gene.name")
+spl7_induced_not_CuDependent_corrected_ChIPCuMinus <- merge(spl7_induced_not_CuDependent_corrected, ChIP_minus, by.x = "AGI", by.y = "gene.name")
+spl7_induced_not_CuDependent_corrected_ChIPCuIntersect <- merge(spl7_induced_not_CuDependent_corrected, ChIP_Intersect, by.x = "AGI", by.y = "gene.name")
+
+#######spl7_repressed_Cuindependent
+spl7_repressed_not_CuDependent_ChIPCuPlus <- merge(spl7_repressed_not_CuDependent, ChIP_plus, by.x = "AGI", by.y = "gene.name")
+spl7_repressed_not_CuDependent_ChIPCuMinus <- merge(spl7_repressed_not_CuDependent, ChIP_minus, by.x = "AGI", by.y = "gene.name")
+spl7_repressed_not_CuDependent_ChIPCuIntersect <- merge(spl7_repressed_not_CuDependent, ChIP_Intersect, by.x = "AGI", by.y = "gene.name")
+
+spl7_repressed_not_CuDependent_corrected_ChIPCuPlus <- merge(spl7_repressed_not_CuDependent_corrected, ChIP_plus, by.x = "AGI", by.y = "gene.name")
+spl7_repressed_not_CuDependent_corrected_ChIPCuMinus <- merge(spl7_repressed_not_CuDependent_corrected, ChIP_minus, by.x = "AGI", by.y = "gene.name")
+spl7_repressed_not_CuDependent_corrected_ChIPCuIntersect <- merge(spl7_repressed_not_CuDependent_corrected, ChIP_Intersect, by.x = "AGI", by.y = "gene.name")
+```
+
+## Adding Annotation
+
+```{r}
+###add annotation
+anno <- read.delim("/Volumes/JARVIS-X/PostDoc/Plant_Genomic_Ressources/00 Functional Description for paper/TAIR10_functional_descriptions_for_Meetings_Mapman_strict_genes_202008_03_bHLHadded.txt", header = T)
+names(anno)[1] <- "AGI"
+head(anno)
+
+#####Merging SPL7_dependent with ChIPseq
+spl7dependent_up_compared_ChIPCuPlus_anno <- merge(spl7dependent_up_compared_ChIPCuPlus, anno, by.x = "AGI", by.y = "AGI", all.x = T)
+spl7dependent_up_compared_ChIPCuMinus_anno <- merge(spl7dependent_up_compared_ChIPCuMinus, anno, by.x = "AGI", by.y = "AGI", all.x = T)
+spl7dependent_up_compared_ChIPCuIntersect_anno <- merge(spl7dependent_up_compared_ChIPCuIntersect, anno, by.x = "AGI", by.y = "AGI", all.x = T)
+
+spl7dependent_dwn_compared_ChIPCuPlus_anno <- merge(spl7dependent_dwn_compared_ChIPCuPlus, anno, by.x = "AGI", by.y = "AGI", all.x = T)
+spl7dependent_dwn_compared_ChIPCuMinus_anno <- merge(spl7dependent_dwn_compared_ChIPCuMinus, anno, by.x = "AGI", by.y = "AGI", all.x = T)
+spl7dependent_dwn_compared_ChIPCuIntersect_anno <- merge(spl7dependent_dwn_compared_ChIPCuIntersect, anno, by.x = "AGI", by.y = "AGI", all.x = T)
+
+#######spl7_induced_Cuindependent
+spl7_induced_not_CuDependent_ChIPCuPlus_anno <- merge(spl7_induced_not_CuDependent_ChIPCuPlus, anno, by.x = "AGI", by.y = "AGI", all.x = T)
+spl7_induced_not_CuDependent_ChIPCuMinus_anno <- merge(spl7_induced_not_CuDependent_ChIPCuMinus, anno, by.x = "AGI", by.y = "AGI", all.x = T)
+spl7_induced_not_CuDependent_ChIPCuIntersect_anno <- merge(spl7_induced_not_CuDependent_ChIPCuIntersect, anno, by.x = "AGI", by.y = "AGI", all.x = T)
+
+spl7_induced_not_CuDependent_corrected_ChIPCuPlus_anno <- merge(spl7_induced_not_CuDependent_corrected_ChIPCuPlus, anno, by.x = "AGI", by.y = "AGI", all.x = T)
+spl7_induced_not_CuDependent_corrected_ChIPCuMinus_anno <- merge(spl7_induced_not_CuDependent_corrected_ChIPCuMinus, anno, by.x = "AGI", by.y = "AGI", all.x = T)
+spl7_induced_not_CuDependent_corrected_ChIPCuIntersect_anno <- merge(spl7_induced_not_CuDependent_corrected_ChIPCuIntersect, anno, by.x = "AGI", by.y = "AGI", all.x = T)
+
+#######spl7_repressed_Cuindependent
+spl7_repressed_not_CuDependent_ChIPCuPlus_anno <- merge(spl7_repressed_not_CuDependent_ChIPCuPlus, anno, by.x = "AGI", by.y = "AGI", all.x = T)
+spl7_repressed_not_CuDependent_ChIPCuMinus_anno <- merge(spl7_repressed_not_CuDependent_ChIPCuMinus, anno, by.x = "AGI", by.y = "AGI", all.x = T)
+spl7_repressed_not_CuDependent_ChIPCuIntersect_anno <- merge(spl7_repressed_not_CuDependent_ChIPCuIntersect, anno, by.x = "AGI", by.y = "AGI", all.x = T)
+
+spl7_repressed_not_CuDependent_corrected_ChIPCuPlus_anno <- merge(spl7_repressed_not_CuDependent_corrected_ChIPCuPlus, anno, by.x = "AGI", by.y = "AGI", all.x = T)
+spl7_repressed_not_CuDependent_corrected_ChIPCuMinus_anno <- merge(spl7_repressed_not_CuDependent_corrected_ChIPCuMinus, anno, by.x = "AGI", by.y = "AGI", all.x = T)
+spl7_repressed_not_CuDependent_corrected_ChIPCuIntersect_anno <- merge(spl7_repressed_not_CuDependent_corrected_ChIPCuIntersect, anno, by.x = "AGI", by.y = "AGI", all.x = T)
+```
+
+## Save datasets
+
+```{r}
+#####Merging SPL7_dependent with ChIPseq
+write.table(spl7dependent_up_compared_ChIPCuPlus_anno ,"/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Integrative_Analysis_CHiP_RNAseq/l2FC05/new/spl7dependent_up_compared_ChIPCuPlus_anno.txt", sep = "\t", row.names = F)
+write.table(spl7dependent_up_compared_ChIPCuMinus_anno ,"/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Integrative_Analysis_CHiP_RNAseq/l2FC05/new/spl7dependent_up_compared_ChIPCuMinus_anno.txt", sep = "\t", row.names = F)
+write.table(spl7dependent_up_compared_ChIPCuIntersect_anno ,"/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Integrative_Analysis_CHiP_RNAseq/l2FC05/new/spl7dependent_up_compared_ChIPCuIntersect_anno.txt", sep = "\t", row.names = F)
+
+write.table(spl7dependent_dwn_compared_ChIPCuPlus_anno ,"/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Integrative_Analysis_CHiP_RNAseq/l2FC05/new/spl7dependent_dwn_compared_ChIPCuPlus_anno.txt", sep = "\t", row.names = F)
+write.table(spl7dependent_dwn_compared_ChIPCuMinus_anno ,"/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Integrative_Analysis_CHiP_RNAseq/l2FC05/new/spl7dependent_dwn_compared_ChIPCuMinus_anno.txt", sep = "\t", row.names = F)
+write.table(spl7dependent_dwn_compared_ChIPCuIntersect_anno ,"/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Integrative_Analysis_CHiP_RNAseq/l2FC05/new/spl7dependent_dwn_compared_ChIPCuIntersect_anno.txt", sep = "\t", row.names = F)
+
+#######spl7_induced_Cuindependent
+write.table(spl7_induced_not_CuDependent_ChIPCuPlus_anno ,"/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Integrative_Analysis_CHiP_RNAseq/l2FC05/new/spl7_induced_not_CuDependent_ChIPCuPlus_anno.txt", sep = "\t", row.names = F)
+write.table(spl7_induced_not_CuDependent_ChIPCuMinus_anno ,"/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Integrative_Analysis_CHiP_RNAseq/l2FC05/new/spl7_induced_not_CuDependent_ChIPCuMinus_anno.txt", sep = "\t", row.names = F)
+write.table(spl7_induced_not_CuDependent_ChIPCuIntersect_anno ,"/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Integrative_Analysis_CHiP_RNAseq/l2FC05/new/spl7_induced_not_CuDependent_ChIPCuIntersect_anno.txt", sep = "\t", row.names = F)
+
+write.table(spl7_induced_not_CuDependent_corrected_ChIPCuPlus_anno ,"/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Integrative_Analysis_CHiP_RNAseq/l2FC05/new/spl7_induced_not_CuDependent_corrected_ChIPCuPlus_anno.txt", sep = "\t", row.names = F)
+write.table(spl7_induced_not_CuDependent_corrected_ChIPCuMinus_anno ,"/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Integrative_Analysis_CHiP_RNAseq/l2FC05/new/spl7_induced_not_CuDependent_corrected_ChIPCuMinus_anno.txt", sep = "\t", row.names = F)
+write.table(spl7_induced_not_CuDependent_corrected_ChIPCuIntersect_anno ,"/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Integrative_Analysis_CHiP_RNAseq/l2FC05/new/spl7_induced_not_CuDependent_corrected_ChIPCuIntersect_anno.txt", sep = "\t", row.names = F)
+
+#######spl7_repressed_Cuindependent
+write.table(spl7_repressed_not_CuDependent_ChIPCuPlus_anno ,"/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Integrative_Analysis_CHiP_RNAseq/l2FC05/new/spl7_repressed_not_CuDependent_ChIPCuPlus_anno.txt", sep = "\t", row.names = F)
+write.table(spl7_repressed_not_CuDependent_ChIPCuMinus_anno ,"/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Integrative_Analysis_CHiP_RNAseq/l2FC05/new/spl7_repressed_not_CuDependent_ChIPCuMinus_anno.txt", sep = "\t", row.names = F)
+write.table(spl7_repressed_not_CuDependent_ChIPCuIntersect_anno ,"/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Integrative_Analysis_CHiP_RNAseq/l2FC05/new/spl7_repressed_not_CuDependent_ChIPCuIntersect_anno.txt", sep = "\t", row.names = F)
+
+write.table(spl7_repressed_not_CuDependent_corrected_ChIPCuPlus_anno ,"/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Integrative_Analysis_CHiP_RNAseq/l2FC05/new/spl7_repressed_not_CuDependent_corrected_ChIPCuPlus_anno.txt", sep = "\t", row.names = F)
+write.table(spl7_repressed_not_CuDependent_corrected_ChIPCuMinus_anno ,"/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Integrative_Analysis_CHiP_RNAseq/l2FC05/new/spl7_repressed_not_CuDependent_corrected_ChIPCuMinus_anno.txt", sep = "\t", row.names = F)
+write.table(spl7_repressed_not_CuDependent_corrected_ChIPCuIntersect_anno ,"/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Integrative_Analysis_CHiP_RNAseq/l2FC05/new/spl7_repressed_not_CuDependent_corrected_ChIPCuIntersect_anno.txt", sep = "\t", row.names = F)
+
+```
+
+## R Markdown
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

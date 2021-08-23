@@ -1,0 +1,2723 @@
+---
+title: "Intagrative Analysis of spl7-targets using ChIP & RNAseq"
+author: "Krause & Pietzenuk"
+date: "7/28/2020"
+output: html_document
+---
+
+# 1: Preparation
+## Loading the Qualimap Counts into R
+setwd("~/Documents/PostDoc/Projects/SPL7 - Anna/Marcus/Von Server/Counts/count_data/")
+```{r}
+#setwd("~/Documents/PostDoc/Projects/SPL7 - Anna/Marcus/Von Server/Counts/count_data/")
+AS1 = read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/counts_genes/AS1.txt", header = FALSE, sep = "\t")
+AS2 = read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/counts_genes/AS2.txt", header = FALSE, sep = "\t")
+AS3 = read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/counts_genes/AS3.txt", header = FALSE, sep = "\t")
+AS4 = read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/counts_genes/AS4.txt", header = FALSE, sep = "\t")
+AS5 = read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/counts_genes/AS5.txt", header = FALSE, sep = "\t")
+AS6 = read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/counts_genes/AS6.txt", header = FALSE, sep = "\t")
+AS7 = read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/counts_genes/AS7.txt", header = FALSE, sep = "\t")
+AS8 = read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/counts_genes/AS8.txt", header = FALSE, sep = "\t")
+AS9 = read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/counts_genes/AS9.txt", header = FALSE, sep = "\t")
+AS10 = read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/counts_genes/AS10.txt", header = FALSE, sep = "\t")
+AS11 = read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/counts_genes/AS11.txt", header = FALSE, sep = "\t")
+AS12 = read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/counts_genes/AS12.txt", header = FALSE, sep = "\t")
+```
+
+
+## Renaming the Count-Columns
+
+ # Column 1 = "V1"
+```{r}
+#setwd("/home/mkrause/Marcus/Von Server/Counts/")
+names(AS1)[2] <- "WTwCu_R1"
+names(AS2)[2] <- "WTwoCu_R1"
+names(AS3)[2] <- "WTwCu_R2"
+names(AS4)[2] <- "WTwoCu_R2"
+names(AS5)[2] <- "WTwCu_R3"
+names(AS6)[2] <- "WTwoCu_R3"
+names(AS7)[2] <- "spl7wCu_R1"
+names(AS8)[2] <- "spl7woCu_R1"
+names(AS9)[2] <- "spl7wCu_R2"
+names(AS10)[2] <- "spl7woCu_R2"
+names(AS11)[2] <- "spl7wCu_R3"
+names(AS12)[2] <- "spl7woCu_R3"
+```
+
+
+## Merging all Count-Data into one Frame
+
+ # sorted: WTwCu R1-3, WTwoCu R1-3, MTwCu R1-3, MTwoCu R1-3
+```{r}
+Merge1 = merge(AS1, AS3, by = "V1")
+Merge1 = merge(Merge1, AS5, by = "V1")
+Merge1 = merge(Merge1, AS2, by = "V1")
+Merge1 = merge(Merge1, AS4, by = "V1")
+Merge1 = merge(Merge1, AS6, by = "V1")
+Merge1 = merge(Merge1, AS7, by = "V1")
+Merge1 = merge(Merge1, AS9, by = "V1")
+Merge1 = merge(Merge1, AS11, by = "V1")
+Merge1 = merge(Merge1, AS8, by = "V1")
+Merge1 = merge(Merge1, AS10, by = "V1")
+Merge1 = merge(Merge1, AS12, by = "V1")
+
+RawCounts_save <- Merge1
+view(RawCounts_save)
+write.table(RawCounts_save,
+            file = "./../Von Server/Counts/BP_analysis/SVA/RawCounts.txt",
+            sep = "\t",
+            col.names = TRUE,
+            )
+
+#RawCounts <- RawCounts_save[,-1]
+RawCounts <- RawCounts_save
+rownames(RawCounts) <- RawCounts_save[,1]
+head(RawCounts)
+```
+
+
+## GeneSizes  
+
+ # Getting Genome-Sizes from Annotationfile
+```{r}
+RawCountsN <- read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Replicates_excluded/RawCounts.txt", sep = "\t", header = T)
+view(RawCountsN)
+Ath_Anno = read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Annotation_for_TPM_calculation.txt", sep = "\t", header = T)
+nrow(Ath_Anno)
+view(Ath_Anno)
+Ath_Anno$size = (Ath_Anno$end - Ath_Anno$start)+1                                                         
+GeneSizes = aggregate(Ath_Anno$size, by=list(Category=Ath_Anno$gene), FUN=sum)                            
+names(GeneSizes) <- c("V1","GeneSize")
+nrow(GeneSizes)
+GeneSizes$GeneSizeKB <- GeneSizes$GeneSize/1000
+Counts_Calc_Base <- merge(RawCountsN, GeneSizes, by = "V1")
+rownames(RawCountsN) <- RawCountsN$V1
+RawCountsN$V1 <- NULL
+head(RawCountsN)
+```
+
+# 2: Normalization
+
+Counts_Calc_Base  1     = AGI
+                  2:13  = Raw Counts
+                  14:15 = Genesizes(B and KB)
+                  16:27 = RPK
+                  28:39 = TPM
+
+## TPM
+
+### Calculating the RPK (Reads per Kilobase)
+
+ # Counts / Genesize
+```{r}
+Counts_Calc_Base$WTwCu_R1_RPK = Counts_Calc_Base$WTwCu_R1 / Counts_Calc_Base$GeneSizeKB
+Counts_Calc_Base$WTwCu_R2_RPK = Counts_Calc_Base$WTwCu_R2 / Counts_Calc_Base$GeneSizeKB
+Counts_Calc_Base$WTwCu_R3_RPK = Counts_Calc_Base$WTwCu_R3 / Counts_Calc_Base$GeneSizeKB
+Counts_Calc_Base$WTwoCu_R1_RPK = Counts_Calc_Base$WTwoCu_R1 / Counts_Calc_Base$GeneSizeKB
+Counts_Calc_Base$WTwoCu_R2_RPK = Counts_Calc_Base$WTwoCu_R2 / Counts_Calc_Base$GeneSizeKB
+Counts_Calc_Base$WTwoCu_R3_RPK = Counts_Calc_Base$WTwoCu_R3 / Counts_Calc_Base$GeneSizeKB
+Counts_Calc_Base$spl7wCu_R1_RPK = Counts_Calc_Base$spl7wCu_R1 / Counts_Calc_Base$GeneSizeKB
+Counts_Calc_Base$spl7wCu_R2_RPK = Counts_Calc_Base$spl7wCu_R2 / Counts_Calc_Base$GeneSizeKB
+Counts_Calc_Base$spl7wCu_R3_RPK = Counts_Calc_Base$spl7wCu_R3 / Counts_Calc_Base$GeneSizeKB
+Counts_Calc_Base$spl7woCu_R1_RPK = Counts_Calc_Base$spl7woCu_R1 / Counts_Calc_Base$GeneSizeKB
+Counts_Calc_Base$spl7woCu_R2_RPK = Counts_Calc_Base$spl7woCu_R2 / Counts_Calc_Base$GeneSizeKB
+Counts_Calc_Base$spl7woCu_R3_RPK = Counts_Calc_Base$spl7woCu_R3 / Counts_Calc_Base$GeneSizeKB
+```
+
+
+### Calculating the Scaling Factors for TPM
+
+ # sum of all RPKs per sample / 1.000.000
+```{r}
+WWR1 = sum(Counts_Calc_Base$WTwCu_R1_RPK) / 1000000
+WWR2 = sum(Counts_Calc_Base$WTwCu_R2_RPK) / 1000000
+WWR3 = sum(Counts_Calc_Base$WTwCu_R3_RPK) / 1000000
+WWOR1 = sum(Counts_Calc_Base$WTwoCu_R1_RPK) / 1000000
+WWOR2 = sum(Counts_Calc_Base$WTwoCu_R2_RPK) / 1000000
+WWOR3 = sum(Counts_Calc_Base$WTwoCu_R3_RPK) / 1000000
+SWR1 = sum(Counts_Calc_Base$spl7wCu_R1_RPK) / 1000000
+SWR2 = sum(Counts_Calc_Base$spl7wCu_R2_RPK) / 1000000
+SWR3 = sum(Counts_Calc_Base$spl7wCu_R3_RPK) / 1000000
+SWOR1 = sum(Counts_Calc_Base$spl7woCu_R1_RPK) / 1000000
+SWOR2 = sum(Counts_Calc_Base$spl7woCu_R2_RPK) / 1000000
+SWOR3 = sum(Counts_Calc_Base$spl7woCu_R3_RPK) / 1000000
+```
+
+
+### Calculating Transcripts per Kilobase Million
+
+ # RPK / Scaling-factor
+```{r}
+Counts_Calc_Base$WTwCu_R1_TPM = Counts_Calc_Base$WTwCu_R1_RPK / WWR1
+Counts_Calc_Base$WTwCu_R2_TPM = Counts_Calc_Base$WTwCu_R2_RPK / WWR2
+Counts_Calc_Base$WTwCu_R3_TPM = Counts_Calc_Base$WTwCu_R3_RPK / WWR3
+Counts_Calc_Base$WTwoCu_R1_TPM = Counts_Calc_Base$WTwoCu_R1_RPK / WWOR1
+Counts_Calc_Base$WTwoCu_R2_TPM = Counts_Calc_Base$WTwoCu_R2_RPK / WWOR2
+Counts_Calc_Base$WTwoCu_R3_TPM = Counts_Calc_Base$WTwoCu_R3_RPK / WWOR3
+Counts_Calc_Base$spl7wCu_R1_TPM = Counts_Calc_Base$spl7wCu_R1_RPK / SWR1
+Counts_Calc_Base$spl7wCu_R2_TPM = Counts_Calc_Base$spl7wCu_R2_RPK / SWR2
+Counts_Calc_Base$spl7wCu_R3_TPM = Counts_Calc_Base$spl7wCu_R3_RPK / SWR3
+Counts_Calc_Base$spl7woCu_R1_TPM = Counts_Calc_Base$spl7woCu_R1_RPK / SWOR1
+Counts_Calc_Base$spl7woCu_R2_TPM = Counts_Calc_Base$spl7woCu_R2_RPK / SWOR2
+Counts_Calc_Base$spl7woCu_R3_TPM = Counts_Calc_Base$spl7woCu_R3_RPK / SWOR3
+
+TPM <- Counts_Calc_Base[,c(1,28,29,30,31,32,33,34,35,36,37,38,39)]
+rownames(TPM) <- TPM$V1
+TPM[1] <- NULL
+```
+### Log2(TPM)
+
+```{r}
+
+TPMlog2_plus1 <- log2(TPM[1:12]+1)
+
+```
+## CPM
+
+```{r}
+
+rownames(RawCountsN) <- RawCountsN$V1
+RawCountsN$V1 <- NULL
+CPM <- cpm(RawCountsN)
+RawCountsN$V1 <- rownames(RawCountsN)
+rownames(RawCountsN) <- NULL
+
+```
+
+## Rlog
+```{r}
+RawCounts <- read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Replicates_excluded/RawCounts.txt", sep = "\t", header = T)
+head(RawCounts)
+
+col.data <- read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/SVA/coldata.txt", header = T)
+head(col.data)
+col.data$Combination = as.factor(col.data$Combination)
+n.col.data <- col.data[1:12,]
+rownames(RawCounts) <- RawCounts$V1
+RawCounts$V1 <- NULL
+head(RawCounts)
+str(RawCounts)
+str(col.data)
+
+ddsrlog <- DESeqDataSetFromMatrix(countData=RawCounts,
+                                  colData=col.data,
+                                  design=~Combination)
+
+Rlog <- rlog(ddsrlog, blind = FALSE)
+rlog_df <- as.data.frame(Rlog)
+
+```
+## VST (Variance Stabilizing Transformation)
+
+```{r}
+
+vst_dds = vst(dds, blind = TRUE) # Variance stabilizing transformation -VST is not blind to the experimental design
+
+vst_dds_sampledist <- dist( t( assay(vsd) ) ) #Calculate sample distance
+vst_dds_sampledistmatrix <- as.matrix( vst_dds_sampledist )
+
+vst_colours = colorRampPalette( rev(brewer.pal(9, "Blues")) )(255)
+heatmap.2(vst_dds_sampledistmatrix, trace="none", col=vst_colours, main = "Sample Distance Matrix", cexCol = 0.6, cexRow = 0.6)
+
+```
+## Standardization (decostand)
+```{r}
+TPM_stand <- decostand(log2((TPM)+1),
+                       "standardize",
+                       na.rm = F) #Standardize. Each value in a column is standardized to a mean of 0 and standard deviation of 1. 
+          #decostand(x, method, MARGIN, range.global, logbase = 2, na.rm=FALSE, ...)
+TPM_stand_dist<-dist(t(TPM_stand))
+hcluster<-hclust(TPM_stand_dist,method="ward.D")
+plot(hcluster, cex = 0.5, hang = -1, main="Hierarchical clustering from standardized TMP")
+```
+
+# 3: Quality-Analysis (Plots)
+## Histograms
+
+```{r}
+
+GenoColour <- c("WTwCu"="darkseagreen2","WTwoCu"="darkseagreen3","MTwCu"="steelblue2","MTwoCu"="steelblue3" )
+print(GenoColour)
+x <- 1
+hist(as.matrix(RawCounts+x),
+     col="blue",
+     main = "Counts per Gene",
+     ylab = "Number of Genes",
+     xlab = "Counts",
+     breaks = 100)
+hist(as.matrix(RawCounts+x),
+     col="blue",
+     main = "Counts per Gene",
+     ylab = "Number of Genes",
+     xlab = "Counts",
+     breaks = 5000,
+     xlim = c(0,15000),
+     ylim = c(0,50000)) # um die kurve am anfang zu verdeutlichen
+
+ # log2,10 and e of Rawcounts
+
+hist(as.matrix(log2(RawCounts+x)),
+     col="blue",
+     main = "Log2-transformed Counts per Gene",
+     ylab = "Number of Genes",
+     xlab = "log2(Counts + 1)",
+     breaks = 100)
+hist(as.matrix(log10(RawCounts+x)),
+     col="blue",
+     main = "Log10-transformed Counts per Gene",
+     ylab = "Number of Genes",
+     xlab = "log10(Counts + 1)",
+     breaks = 100)
+hist(as.matrix(log(RawCounts+x)),
+     col="blue",
+     main = "Ln-transformed Counts per Gene",
+     ylab = "Number of Genes",
+     xlab = "ln(Counts + 1)",
+     breaks = 100)
+
+
+hist(as.matrix(TPM+x),
+     col="green",
+     main = "Normalized Counts per Gene",
+     ylab = "Number of Genes",
+     xlab = "TPM",
+     breaks = 100)
+hist(as.matrix(TPM+x),
+     col="green",
+     main = "Normalized Counts per Gene",
+     ylab = "Number of Genes",
+     xlab = "TPM",
+     breaks = 5000,
+     xlim = c(0,15000),
+     ylim = c(0,50000)) # um die kurve am anfang zu verdeutlichen
+
+ # log2,10 and e of TPM
+
+hist(as.matrix(log2(TPM+x)),
+     col="green",
+     main = "Normalized Log2-transformed Counts per Gene",
+     ylab = "Number of Genes",
+     xlab = "log2(TPM)",
+     breaks = 100)
+hist(as.matrix(log10(TPM+x)),
+     col="green",
+     main = "Normalized Log10-transformed Counts per Gene",
+     ylab = "Number of Genes",
+     xlab = "TPM(log10)",
+     breaks = 100)
+hist(as.matrix(log(TPM+x)),
+     col="green",
+     main = "Normalized Ln-transformed Counts per Gene",
+     ylab = "Number of Genes",
+     xlab = "ln(TPM+1)",
+     breaks = 100)
+```
+
+## Boxplots
+
+ # Seeing the distribution of counts
+```{r}
+x = 1
+colors = c(rep("darkseagreen2",3),
+           rep("darkseagreen3",3),
+           rep("steelblue2",3),
+           rep("steelblue3",3))
+
+boxplot(log2(RawCounts+x),
+        col = colors,
+        horizontal = TRUE,
+        cex.axis=0.5,
+        las=1,
+        xlim= c(0,15),
+        ylab="Samples",
+        xlab="log2(counts +1)",
+        main="RawCounts")
+
+boxplot(log2(TPM+x),
+        col = colors,
+        horizontal = TRUE,
+        cex.axis=0.5,
+        las=1,
+        xlim= c(0,15),
+        ylab="Samples",
+        xlab="log2(counts +1)",
+        main= "TPM-Normalized")
+
+rm(x)
+rm(colors)
+```
+
+## Density-Plots (getting the threshold)
+
+Beware: the R function plotDensity does not display the actual distribution of your values, but a polynomial fit. The representation thus generally looks smoother than the actual data. It is important to realize that, in some particular cases, the fit can lead to extrapolated values which can be misleading.
+
+lwd = linewidth
+lty = linetype
+
+```{r}
+GenoColour <- c("WTwCu"="darkseagreen4","WTwoCu"="darkseagreen3","MTwCu"="steelblue4","MTwoCu"="steelblue3" )
+print(GenoColour)
+x = 1
+plotDensity(log2(RawCounts[-1]+x),
+            col = colors,
+            lty= 1, 
+            lwd=1,
+            xlim = as.numeric(c(0,20)),
+            ylim = as.numeric(c(0,0.2)),
+            xlab = "log2(Counts+1)",
+            ylab = "Density",
+            main="Raw Counts Density")
+grid()
+abline(v = 1.6, untf = FALSE)
+legend("topright", legend = names(GenoColour), col = GenoColour, lwd = 5)
+
+plotDensity(log2(TPM+x),
+            col = colors,
+            lty= 1,
+            lwd=1,
+            xlim = as.numeric(c(0,20)),
+            ylim = as.numeric(c(0,0.5)),
+            xlab = "log2(TPM+1)",
+            ylab = "Density",
+            main="Normalized Counts Density")
+grid()
+abline(v = 1.2, untf = FALSE)
+legend("topright", legend = names(GenoColour), col = GenoColour, lwd = 5)
+
+plotDensity(log2(as.data.frame(CPM)+x),
+            col = colors,
+            lty= 1,
+            lwd=1,
+            xlim = as.numeric(c(0,20)),
+            ylim = as.numeric(c(0,0.2)),
+            xlab = "log2(CPM+1)",
+            ylab = "Density",
+            main="Normalized Counts Density")
+grid()
+abline(v = 1.2, untf = FALSE)
+legend("topright", legend = names(GenoColour), col = GenoColour, lwd = 5)
+
+plotDensity(log2(Cut_WTwCu+x),
+            col = c("red","blue","green"),
+            lty= 1,
+            lwd=1,
+            xlim = as.numeric(c(0,20)),
+            ylim = as.numeric(c(0,0.2)),
+            xlab = "log2(CPM+1)",
+            ylab = "Density",
+            main="Raw Counts Density of WTwCu")
+grid()
+abline(v = 1.2, untf = FALSE)
+legend("topright", legend = c("Replicate 1", "Replicate 2", "Replicate 3"), col = c("red","blue","green"), lwd = 5)
+
+plotDensity(log2(Cut_WTwoCu+x),
+            col = c("red","blue","green"),
+            lty= 1,
+            lwd=1,
+            xlim = as.numeric(c(0,20)),
+            ylim = as.numeric(c(0,0.2)),
+            xlab = "log2(CPM+1)",
+            ylab = "Density",
+            main="Raw Counts Density of WTwoCu")
+grid()
+abline(v = 1.2, untf = FALSE)
+legend("topright", legend = c("Replicate 1", "Replicate 2", "Replicate 3"), col = c("red","blue","green"), lwd = 5)
+
+
+```
+
+## Scatterplot
+
+### Functions
+```{r}
+
+plotFun<- function(x,y)
+{
+  dns <- densCols(x,y); 
+  points(x,y, col=dns, pch=".", panel.first=grid()); 
+  abline(lm(y~x), col="brown")
+}
+
+panel.cor = function(x, y, digits=4, prefix="r=", cex.cor,method="p")
+{
+  usr = par("usr"); on.exit(par(usr))
+  par(usr = c(0, 1, 0, 1))
+  r = abs(cor(x, y, use="pairwise.complete.obs"))
+  txt = format(c(r, 0.123456789), digits=digits)[1]
+  txt = paste(prefix, txt, sep="")
+  if(missing(cex.cor)) cex.cor = 0.8/strwidth(txt)
+  text(0.5, 0.5, txt, cex = cex.cor)
+} 
+
+panelline= function(x,y,...)
+{
+  points(x,y);
+  abline(lm(y~x))
+}
+
+
+```
+
+### Plot
+
+```{r}
+
+ # Rawcounts
+
+pairs(log2(RawCounts[,sample(ncol(RawCounts),5)] + x),
+      panel=plotFun,
+      lower.panel = NULL) # Plot the scatter plot for a few pairs of variables selected at random
+pairs(log2(RawCounts[1:12] + x),
+      panel=plotFun,
+      lower.panel = NULL) #alle gegen alle
+pairs(log2(RawCounts[1:3] + x),
+      panel=plotFun,
+      lower.panel = NULL) # WTwCu
+pairs(log2(RawCounts[4:6] + x),
+      panel=plotFun,
+      lower.panel = NULL) # WTwoCu
+pairs(log2(RawCounts[7:9] + x),
+      panel=plotFun,
+      lower.panel = NULL) # spl7wCu
+pairs(log2(RawCounts[10:12] + x),
+      panel=plotFun,
+      lower.panel = NULL) # spl7woCu
+
+pairs(log2(RawCounts[1:12] + 1),
+      upper.panel = plotFun,
+      lower.panel=panel.cor)
+
+ # TPM
+
+pairs(log2(TPM[1:12] + 1),
+      upper.panel = plotFun,
+      lower.panel=panel.cor)
+legend("bottomleft", bty="n", legend=paste("R2 is", format(rsquare, digits=4)))
+
+
+```
+
+
+## Hierarchical Clustering
+
+### hclust
+
+```{r}
+
+hclust_base = log2(TPMn[1:12]+1)   # 1:12 all
+# head(hclust_base)
+hclust1 <- t(hclust_base)
+hclust2 <- as.data.frame(hclust1)
+# head(test2)
+medians = apply(hclust2,2,median)
+# head(test)
+mads = apply(hclust2,2,mad)
+# head(mads)
+hclust_med_mad = scale(hclust2,center=medians,scale=mads)
+# head(cars.use)
+hclust_dist = dist(hclust_med_mad)
+hclust_fin = hclust(hclust_dist , method = "ward.D2")
+plot(hclust_fin,main='',ylab="Height",xlab="") # Cluster of Samples log2(TPM)
+
+###Clustering usin rlog data
+###Rlog clustering
+LogR <- rlog(ddsN, blind = FALSE, fitType = "local")
+sampleDists_R <- dist( t( assay(LogR) ) )
+
+hcluster_R <- hclust(sampleDists_R,method="ward.D2")
+plot(hcluster_R)
+
+```
+#### standardization
+```{r}
+TPM_stand<-decostand(log2(na.omit(TPM)+1),"standardize") #Standardize. Each value in a column is standardized to a mean of 0 and standard deviation of 1.
+```
+
+log2cpm+1 CPM errechnen - dens plot 
+### heatmap2 (schÃ¶n)
+ # random sample
+```{r}
+
+ # Random 
+filtered_log2counts <- TPMlog2_plus1[rowSums(TPMlog2_plus1) >0,]
+filtered_log2counts$V1 <- rownames(filtered_log2counts)
+
+sample_filtered_counts <- sample_n(filtered_log2counts, 500, rowname = TRUE)
+rownames(sample_filtered_counts) <- sample_filtered_counts$V1
+sample_filtered_counts$V1 <- NULL
+
+heatmap.2(as.matrix(sample_filtered_counts),
+          main = "500 random Genes",
+          scale = "row", 
+          hclust=function(x) hclust(x,method="average"), 
+          distfun=function(x) as.dist((1-cor(t(x)))/2), 
+          trace="none", 
+          density="none",
+          labRow = "Genes",
+          cexCol = 0.7,
+          srtCol = 320,
+          adjCol = c(0, 0),
+          #labRow=rownames(sample_filteres_counts ),
+          #offsetCol = 0,5,
+          )
+
+```
+
+ # sig-genes
+```{r}
+setwd("/home/mkrause/Marcus/Von Server/Counts/")
+TAIR10_tr1 <- read.delim("./TAIR10_tr1_cut", sep = "\t", header = FALSE )
+
+# wCu
+
+GeneList <- dds_res_wCu_sig
+GeneList$V1 <- rownames(GeneList)
+dds_res_wCu_sig_w_description <- merge(GeneList, TAIR10_tr1, by = "V1") # MT_int 1735 vs 1389? woCu 2522  vs 2044? Araport11 vs tair10?
+GeneList$baseMean <- NULL
+GeneList$log2FoldChange <- NULL 
+GeneList$lfcSE <- NULL
+GeneList$stat <- NULL
+GeneList$pvalue <- NULL
+GeneList$padj <- NULL
+
+DataTest <- merge(filtered_log2counts, GeneList, by = "V1")
+rownames(DataTest) <- DataTest$V1
+DataTest$V1 <- NULL
+summary(DataTest)
+title <- c(nrow(DataTest), "significant genes from log2",(wCu))
+if(nrow(DataTest) < 20){
+  labRow <- rownames(DataTest)
+} else {
+    labRow <- "Genes"
+}
+
+
+heatmap.2(as.matrix(DataTest),
+          main = title,
+          scale = "row", 
+          hclust=function(x) hclust(x,method="average"), 
+          distfun=function(x) as.dist((1-cor(t(x)))/2), 
+          trace="none", 
+          density="none",
+          cexCol = 0.7,
+          srtCol = 320,
+          adjCol = c(0, 0),
+          #cexRow = 0,7,
+          srtRow = 320,
+          adjRow = c(0,0),
+          labRow = labRow,
+          )
+```
+
+```{r}  
+# woCu
+
+GeneList <- dds_res_woCu_sig
+GeneList$V1 <- rownames(GeneList)
+dds_res_wCu_sig_w_description <- merge(GeneList, TAIR10_tr1, by = "V1") # MT_int 1735 vs 1389? woCu 2522  vs 2044? Araport11 vs tair10?
+GeneList$baseMean <- NULL
+GeneList$log2FoldChange <- NULL 
+GeneList$lfcSE <- NULL
+GeneList$stat <- NULL
+GeneList$pvalue <- NULL
+GeneList$padj <- NULL
+
+DataTest <- merge(filtered_log2counts, GeneList, by = "V1")
+rownames(DataTest) <- DataTest$V1
+DataTest$V1 <- NULL
+summary(DataTest)
+title <- c(nrow(DataTest), "significant genes from log2(woCu)")
+labRow <- 2
+if(nrow(DataTest) < 20){
+  labRow <- rownames(DataTest)
+} else {
+    labRow <- "Genes"
+  }
+heatmap.2(as.matrix(DataTest),
+          main = title,
+          scale = "row", 
+          hclust=function(x) hclust(x,method="average"), 
+          distfun=function(x) as.dist((1-cor(t(x)))/2), 
+          trace="none", 
+          density="none",
+          cexCol = 0.7,
+          srtCol = 320,
+          adjCol = c(0, 0),
+          #cexRow = 0,7,
+          srtRow = 320,
+          adjRow = c(0,0),
+          labRow = labRow,
+          #labRow=rownames(DataTest),
+          )
+```
+
+```{r}  
+# MT
+
+GeneList <- dds_res_MT_int_sig
+GeneList$V1 <- rownames(GeneList)
+dds_res_wCu_sig_w_description <- merge(GeneList, TAIR10_tr1, by = "V1") # MT_int 1735 vs 1389? woCu 2522  vs 2044? Araport11 vs tair10?
+GeneList$baseMean <- NULL
+GeneList$log2FoldChange <- NULL 
+GeneList$lfcSE <- NULL
+GeneList$stat <- NULL
+GeneList$pvalue <- NULL
+GeneList$padj <- NULL
+
+DataTest <- merge(filtered_log2counts, GeneList, by = "V1")
+rownames(DataTest) <- DataTest$V1
+DataTest$V1 <- NULL
+summary(DataTest)
+title <- c(nrow(DataTest), "significant genes from log2(MT)")
+if(nrow(DataTest) < 20){
+  labRow <- rownames(DataTest)
+} else {
+    labRow <- "Genes"
+  }
+heatmap.2(as.matrix(DataTest),
+          main = title,
+          scale = "row", 
+          hclust=function(x) hclust(x,method="average"), 
+          distfun=function(x) as.dist((1-cor(t(x)))/2), 
+          trace="none", 
+          density="none",
+          cexCol = 0.7,
+          srtCol = 320,
+          adjCol = c(0, 0),
+          #cexRow = 0,7,
+          srtRow = 320,
+          adjRow = c(0,0),
+          labRow = labRow,
+          )
+```
+
+```{r}
+# WT
+
+GeneList <- dds_res_WT_int_sig
+GeneList$V1 <- rownames(GeneList)
+dds_res_wCu_sig_w_description <- merge(GeneList, TAIR10_tr1, by = "V1") # MT_int 1735 vs 1389? woCu 2522  vs 2044? Araport11 vs tair10?
+GeneList$baseMean <- NULL
+GeneList$log2FoldChange <- NULL 
+GeneList$lfcSE <- NULL
+GeneList$stat <- NULL
+GeneList$pvalue <- NULL
+GeneList$padj <- NULL
+
+DataTest <- merge(filtered_log2counts, GeneList, by = "V1")
+rownames(DataTest) <- DataTest$V1
+DataTest$V1 <- NULL
+summary(DataTest)
+title <- c(nrow(DataTest), "significant genes from log2(WT)")
+if(nrow(DataTest) < 70){
+  labRow <- rownames(DataTest)
+} else {
+    labRow <- "Genes"
+  }
+heatmap.2(as.matrix(DataTest),
+          main = title,
+          scale = "row", 
+          hclust=function(x) hclust(x,method="average"), 
+          distfun=function(x) as.dist((1-cor(t(x)))/2), 
+          trace="none", 
+          density="none",
+          cexCol = 0.7,
+          srtCol = 320,
+          adjCol = c(0, 0),
+          #cexRow = 0,7,
+          srtRow = 320,
+          adjRow = c(0,0),
+          labRow = labRow,
+          )
+```
+
+
+## Principal Component Analysis
+
+```{r}
+
+vsd = vst(ddsN, blind = TRUE) # Variance stabilizing transformation
+
+sampleDists_vsd <- dist( t( assay(vsd) ) ) #Calculate sample distance
+sampleDistMatrix_vsd <- as.matrix( sampleDists_vsd )
+
+colours_vsd = colorRampPalette( rev(brewer.pal(9, "Blues")) )(255)
+heatmap.2(sampleDistMatrix_vsd, trace="none", col=colours_vsd, main = "Heatmap from vsd", cexCol = 0.6, cexRow = 0.6)
+
+########################
+    ##    PCA    ##
+########################
+
+#Test PCA
+colData(ddsN)
+pcaData <- plotPCA(vsd, intgroup=c("Genotype", "Treatment", "Replicate"))
+plotPCA(vsdS, intgroup=c("population", "phenotype", "location"))
+plotPCA(vsdR, intgroup=c("population", "phenotype", "location"))
+
+
+#Visualization of PCA
+pcaData <- plotPCA(vsd, intgroup=c("Genotype", "Treatment", "Replicate"), returnData=TRUE)
+percentVar <- round(100 * attr(pcaData, "percentVar"))
+
+ggplot(pcaData, aes(PC1, PC2, color=Treatment, shape=Genotype)) +
+  geom_point(size=3) +
+  xlab(paste0("PC1 (",percentVar[1],"%) ")) +
+  ylab(paste0("PC2 (",percentVar[2],"%) ")) + 
+  coord_fixed() +
+  theme_bw() +
+  ggtitle("All Samples") + 
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_color_manual(breaks = pcaData$Genotype,
+                     values=c( "steelblue2", "darkseagreen2", "#FF0000", "#0000FF")) +
+  theme(plot.title = element_text(size = 14, face = "bold"),
+        legend.title=element_text(size=12), 
+        legend.text=element_text(size=12)) +
+  theme(panel.grid.major = element_blank()) +
+  theme(panel.grid.minor = element_blank())
+
+
+```
+# 4: DESeq2
+
+## Standard Calculation
+```{r}
+#setwd("/home/mkrause/Marcus/Von Server/Counts/")
+#RawCountsdds <- RawCounts[1:12]
+RawCountsN <- RawCounts
+RawCountsN <- read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Replicates_excluded/RawCounts.txt", sep = "\t", header = T)
+view(RawCountsN)
+
+col.data <- read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/SVA/coldata.txt", header = T)
+head(col.data)
+view(col.data)
+n.col.data <- col.data[1:12,]
+rownames(RawCountsN) <- RawCountsN$V1
+RawCountsN$V1 <- NULL
+head(RawCountsN)
+ddsN <- DESeqDataSetFromMatrix(countData = RawCountsN,
+                              colData = col.data,
+                              #design =                               ###  Many R formula are valid, including designs with multiple variables, e.g., ~ group + condition, and designs with interactions, e.g., ~ genotype + treatment + genotype:treatment. See results for a variety of designs and how to extract results tables
+                              design = ~Combination) # "Normal" - for SUV since SUV detects Replicate difference
+#design = ~ Genotype + Treatment)        
+#design = ~ Replicate + Combination)     
+#design = ~ Genotype + Treatment+Replicate)
+#design = ~Genotype + Treatment + Genotype:Treatment) # Interaction
+
+###Rlog clustering
+LogN <- rlog(ddsN, blind = FALSE, fitType = "local")
+sampleDists_N <- dist( t( assay(LogN) ) )
+
+hcluster_N <- hclust(sampleDists_N,method="ward.D2")
+plot(hcluster_N)
+
+
+dds_calcN <- DESeq(ddsN,
+                  test = "Wald",       ### For the Wald test, stat is the Wald statistic: the log2FoldChange divided by lfcSE, which is compared to a standard Normal distribution to generate a two-tailed pvalue. 
+                  fitType = "local")
+
+resultsNames(dds_calcN)
+
+###Results
+WT_N <- results(dds_calcN, contrast = c("Combination","WTwoCu","WTwCu"), alpha = 0.05)
+MT_vs_WT_w_Cu_N <- results(dds_calcN, contrast = c("Combination","MTwCu","WTwCu"), alpha = 0.05)
+MT_N <- results(dds_calcN, contrast = c("Combination","MTwoCu","MTwCu"), alpha = 0.05)
+MT_vs_WT_wo_Cu_N <- results(dds_calcN, contrast = c("Combination","MTwoCu","WTwoCu"), alpha = 0.05)
+resultsNames(dds_calcN)
+### Normal DESEq-results
+#WT_Cu_S <- results(dds_calcN, contrast = c("Combination","WTwoCu","WTwCu"))
+#MT_WT_woCu_S<- results(dds_calcN, contrast = c("Combination","MTwoCu","WTwoCu"))
+#MT_Cu_S<- results(dds_calcN, contrast = c("Combination","MTwoCu","MTwCu"))
+#MT_WT_wCu_S<- results(dds_calcN, contrast = c("Combination","MTwCu","WTwCu"))
+## Tresholds: adj. p-value of 0.05; LFC 1/-1
+WT_N_sig<-as.data.frame(WT_N[which(WT_N$padj<0.05&(WT_N$log2FoldChange>=1|WT_N$log2FoldChange<=(-1))),])
+nrow(WT_N_sig)
+MT_vs_WT_w_Cu_N_sig<-as.data.frame(MT_vs_WT_w_Cu_N[which(MT_vs_WT_w_Cu_N$padj<0.05&(MT_vs_WT_w_Cu_N$log2FoldChange>=1|MT_vs_WT_w_Cu_N$log2FoldChange<=(-1))),])
+nrow(MT_vs_WT_w_Cu_N_sig)
+MT_N_sig<-as.data.frame(MT_N[which(MT_N$padj<0.05&(MT_N$log2FoldChange>=1|MT_N$log2FoldChange<=(-1))),])
+nrow(MT_N_sig)
+MT_vs_WT_wo_Cu_N_sig<-as.data.frame(MT_vs_WT_wo_Cu_N[which(MT_vs_WT_wo_Cu_N$padj<0.05&(MT_vs_WT_wo_Cu_N$log2FoldChange>=1|MT_vs_WT_wo_Cu_N$log2FoldChange<=(-1))),])
+nrow(MT_vs_WT_wo_Cu_N_sig)
+
+###Volcano plots
+MT_vs_WT_w_Cu_N
+summary(MT_vs_WT_w_Cu_N)
+plot(MT_vs_WT_w_Cu_N$log2FoldChange, 
+     -log10(MT_vs_WT_w_Cu_N$pvalue),
+     panel.first=grid(),
+     main="Volcano plot spl7 +Cu vs. WT +Cu", 
+     xlab="Effect size: log2(fold-change)",
+     ylab="-log10(adjusted p-value)",
+     pch=20, cex=0.4)
+with(subset(MT_vs_WT_w_Cu_N, padj<.05 & abs(log2FoldChange)>1), points(log2FoldChange, -log10(pvalue), pch=20, col="red"))
+
+MT_vs_WT_wo_Cu_N
+summary(MT_vs_WT_wo_Cu_N)
+plot(MT_vs_WT_wo_Cu_N$log2FoldChange, 
+     -log10(MT_vs_WT_wo_Cu_N$pvalue),
+     panel.first=grid(),
+     main="Volcano plot spl7 -Cu vs. WT -Cu", 
+     xlab="Effect size: log2(fold-change)",
+     ylab="-log10(adjusted p-value)",
+     pch=20, cex=0.4)
+with(subset(MT_vs_WT_wo_Cu_N, padj<.05 & abs(log2FoldChange)>1), points(log2FoldChange, -log10(pvalue), pch=20, col="red"))
+
+WT_N
+summary(WT_N)
+plot(WT_N$log2FoldChange, 
+     -log10(WT_N$pvalue),
+     panel.first=grid(),
+     main="Volcano plot WT -Cu vs. WT +Cu", 
+     xlab="Effect size: log2(fold-change)",
+     ylab="-log10(adjusted p-value)",
+     pch=20, cex=0.4)
+with(subset(WT_N, padj<.05 & abs(log2FoldChange)>1), points(log2FoldChange, -log10(pvalue), pch=20, col="red"))
+
+MT_N
+summary(MT_N)
+plot(MT_N$log2FoldChange, 
+     -log10(MT_N$pvalue),
+     panel.first=grid(),
+     main="Volcano plot MT -Cu vs. MT +Cu", 
+     xlab="Effect size: log2(fold-change)",
+     ylab="-log10(adjusted p-value)",
+     pch=20, cex=0.4)
+with(subset(MT_N, padj<.05 & abs(log2FoldChange)>1), points(log2FoldChange, -log10(pvalue), pch=20, col="red"))
+
+```
+
+## Getting Results
+```{r}
+#setwd("/home/mkrause/Marcus/Von Server/Counts/")
+
+write.table(WT_N,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/normal_analysis/Wildtype_without_Copper_vs_Wildtype_with_Copper.txt",
+            sep = "\t",
+            row.names = TRUE)
+WT_N_sig<-as.data.frame(WT_N[which(WT_N$padj<0.05&(WT_N$log2FoldChange>=1|WT_N$log2FoldChange<=(-1))),])
+write.table(WT_N_sig,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/normal_analysis/Wildtype_without_Copper_vs_Wildtype_with_Copper_sign.txt",
+            sep = "\t",
+            row.names = TRUE)
+
+write.table(MT_vs_WT_w_Cu_N,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/normal_analysis/Mutant_with_Copper_vs_Wildtype_with_Copper.txt",
+            sep = "\t",
+            row.names = TRUE)
+MT_vs_WT_w_Cu_N_sig<-as.data.frame(MT_vs_WT_w_Cu_N[which(MT_vs_WT_w_Cu_N$padj<0.05&(MT_vs_WT_w_Cu_N$log2FoldChange>=1|MT_vs_WT_w_Cu_N$log2FoldChange<=(-1))),])
+write.table(MT_vs_WT_w_Cu_N_sig,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/normal_analysis/Mutant_with_Copper_vs_Wildtype_with_Copper_sign.txt",
+            sep = "\t",
+            row.names = TRUE)
+
+write.table(MT_N,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/normal_analysis/Mutant_without_Copper_vs_Mutant_with_Copper.txt",
+            sep = "\t",
+            row.names = TRUE)
+MT_N_sig<-as.data.frame(MT_N[which(MT_N$padj<0.05&(MT_N$log2FoldChange>=1|MT_N$log2FoldChange<=(-1))),])
+write.table(MT_N_sig,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/normal_analysis/Mutant_without_Copper_vs_Mutant_with_Copper_sign.txt",
+            sep = "\t",
+            row.names = TRUE)
+
+
+write.table(MT_vs_WT_wo_Cu_N,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/normal_analysis/Mutant_without_Copper_vs_Wildtype_without_Copper.txt",
+            sep = "\t",
+            row.names = TRUE)
+MT_vs_WT_wo_Cu_N_sig<-as.data.frame(MT_vs_WT_wo_Cu_N[which(MT_vs_WT_wo_Cu_N$padj<0.05&(MT_vs_WT_wo_Cu_N$log2FoldChange>=1|MT_vs_WT_wo_Cu_N$log2FoldChange<=(-1))),])
+write.table(MT_vs_WT_wo_Cu_N_sig,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/normal_analysis/Mutant_without_Copper_vs_Wildtype_without_Copper_sign.txt",
+            sep = "\t",
+            row.names = TRUE)
+
+```
+## Adding Functional Descriptions
+
+```{r}
+Anno <- read.delim("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/normal_analysis/TAIR10_functional_descriptions_edit2.txt", header = FALSE)
+
+
+ # Wildtype_without_Copper_vs_Wildtype_with_Copper
+WT_N_sig$V1 <- rownames(WT_N_sig)
+WT_N_sig_description <- merge(WT_N_sig,
+                                          Anno,
+                                          by = "V1",
+                                          all.x = TRUE)
+rownames(WT_N_sig_description) <- WT_N_sig_description$V1
+WT_N_sig_description$V1 <- NULL
+WT_N_sig$V1 <- NULL
+write.table(WT_N_sig_description,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/normal_analysis/Wildtype_without_Copper_vs_Wildtype_with_Copper_sign_anno.txt",
+            col.names = TRUE,
+            row.names = TRUE,
+            sep = "\t")
+
+ # Mutant_with_Copper_vs_Wildtype_with_Copper
+MT_vs_WT_w_Cu_N_sig$V1 <- rownames(MT_vs_WT_w_Cu_N_sig)
+MT_vs_WT_w_Cu_N_sig_description <- merge(MT_vs_WT_w_Cu_N_sig,
+                                          Anno,
+                                          by = "V1",
+                                          all.x = TRUE)
+rownames(MT_vs_WT_w_Cu_N_sig_description) <- MT_vs_WT_w_Cu_N_sig_description$V1
+MT_vs_WT_w_Cu_N_sig_description$V1 <- NULL
+MT_vs_WT_w_Cu_N_sig$V1 <- NULL
+write.table(MT_vs_WT_w_Cu_N_sig_description,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/normal_analysis/Mutant_with_Copper_vs_Wildtype_with_Copper_sign_anno.txt",
+            col.names = TRUE,
+            row.names = TRUE,
+            sep = "\t")
+
+ # Mutant_without_Copper_vs_Mutant_with_Copper
+MT_N_sig$V1 <- rownames(MT_N_sig)
+MT_N_sig_description <- merge(MT_N_sig,
+                                          Anno,
+                                          by = "V1",
+                                          all.x = TRUE)
+rownames(MT_N_sig_description) <- MT_N_sig_description$V1
+MT_N_sig_description$V1 <- NULL
+MT_N_sig$V1 <- NULL
+write.table(MT_N_sig_description,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/normal_analysis/Mutant_without_Copper_vs_Mutant_with_Copper_sign_anno.txt",
+            col.names = TRUE,
+            row.names = TRUE,
+            sep = "\t")
+
+ # Mutant_without_Copper_vs_Wildtype_without_Copper
+MT_vs_WT_wo_Cu_N_sig$V1 <- rownames(MT_vs_WT_wo_Cu_N_sig)
+MT_vs_WT_wo_Cu_N_sig_description <- merge(MT_vs_WT_wo_Cu_N_sig,
+                                          Anno,
+                                          by = "V1",
+                                          all.x = TRUE)
+rownames(MT_vs_WT_wo_Cu_N_sig_description) <- MT_vs_WT_wo_Cu_N_sig_description$V1
+MT_vs_WT_wo_Cu_N_sig_description$V1 <- NULL
+MT_vs_WT_wo_Cu_N_sig$V1 <- NULL
+write.table(MT_vs_WT_wo_Cu_N_sig_description,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/normal_analysis/Mutant_without_Copper_vs_Wildtype_without_Copper_sign_anno.txt",
+            col.names = TRUE,
+            row.names = TRUE,
+            sep = "\t")
+
+```
+
+## Two-factor analysis
+
+```{r}
+#setwd("/home/mkrause/Marcus/Von Server/Counts/")
+#RawCountsdds <- RawCounts[1:12]
+RawCounts3 <- read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/SVA/RawCountsSVA.txt", sep = "\t", header = T)
+col.data2 <- read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/SVA/coldata.txt", header = T)
+rownames(RawCounts3) <- RawCounts3$V1
+RawCounts3$V1 <- NULL
+RawCountsdds <- RawCounts3
+view(RawCountsdds)
+#filtered_counts <- RawCountsdds[rowSums(RawCountsdds) !=0,]
+col.data <- read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/Coldata.txt", header = T)
+#col.data$Replicate <- c("one","two","three","one","two","three","one","two","three","one","two","three") # neu
+view(col.data)
+head(col.data)
+n.col.data <- col.data[1:12,]
+head(n.col.data)
+#Ordinary Analysis
+dds <- DESeqDataSetFromMatrix(countData = RawCountsdds,
+                              colData = n.col.data,
+                              design = ~Combination)
+ddsMF <- dds
+#Two-factor normalisation
+#calculate Cooks distance
+ddsMF$IA<-factor(paste0(ddsMF$Genotype,ddsMF$Treatment))
+
+design(ddsMF)<-~ IA
+##### generell isset so das IA dat gleiche is wie Combination; zur Kontrolle bin ich aber Laras "pipe" abgefahren
+
+ddsMF_calc = DESeq(ddsMF,test="Wald",fitType="local")
+
+
+Cooks<-assays(ddsMF_calc)[["cooks"]]
+Cooks_max<-mcols(ddsMF_calc)$maxCooks
+Cooks_max_R<-cbind(rownames(Cooks),Cooks_max)
+
+m <- nrow(attr(ddsMF_calc,"dispModelMatrix"))
+p <- ncol(attr(ddsMF_calc,"dispModelMatrix"))
+defaultCutoff <- qf(.99, p, m - p)#7.006077 before, 6 after
+
+ddsMF$IA<-factor(paste0(ddsMF$Genotype,ddsMF$Treatment))
+
+design(ddsMF)<- ~Replicate + IA
+  
+ddsMF_calc = DESeq(ddsMF,test="Wald",fitType="local",betaPrior=T)
+
+resultsNames(ddsMF_calc)
+
+####Extract Results
+#
+WT_MT_wC<-results(ddsMF_calc,contrast=c("IA","spl7_mutant0.5_mM_Cu","wildtype0.5_mM_Cu"),alpha=0.05)
+WT_MT_wC$padj[Cooks_max>defaultCutoff]<-NA ###can be added to results?!?!
+summary(WT_MT_wC)
+
+WT_MT_wC_sig<-as.data.frame(WT_MT_wC[which(WT_MT_wC$padj<=0.05&(WT_MT_wC$log2FoldChange>=1|WT_MT_wC$log2FoldChange<=(-1))),])
+#view(WT_MT_wC_sig)
+write.table(WT_MT_wC_sig,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Results_multiFactor_analysis/Mutant_with_Copper_vs_Wildtype_with_Copper_sig.txt",
+            sep = "\t",
+            row.names = TRUE)
+#
+WT_MT_woC<-results(ddsMF_calc,contrast=c("IA","spl7_mutant0.0_mM_Cu","wildtype0.0_mM_Cu"),alpha=0.05)
+WT_MT_woC$padj[Cooks_max>defaultCutoff]<-NA
+
+WT_MT_woC_sig<-as.data.frame(WT_MT_woC[which(WT_MT_woC$padj<=0.05&(WT_MT_woC$log2FoldChange>=1|WT_MT_woC$log2FoldChange<=(-1))),])
+write.table(WT_MT_woC_sig,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Results_multiFactor_analysis/Mutante_without_Copper_vs_Wildtype_without_Copper_sig.txt",
+            sep = "\t",
+            row.names = TRUE)
+#
+WT_wC_WT_woC<-results(ddsMF_calc,contrast=c("IA","wildtype0.0_mM_Cu","wildtype0.5_mM_Cu"),alpha=0.05)
+WT_wC_WT_woC$padj[Cooks_max>defaultCutoff]<-NA
+
+WT_wC_WT_woC_sig<-as.data.frame(WT_wC_WT_woC[which(WT_wC_WT_woC$padj<=0.05&(WT_wC_WT_woC$log2FoldChange>=1|WT_wC_WT_woC$log2FoldChange<=(-1))),])
+write.table(WT_wC_WT_woC_sig,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Results_multiFactor_analysis/Wildtype_without_Copper_vs_Wildtype_with_Copper_sig.txt",
+            sep = "\t",
+            row.names = TRUE)
+#
+MT_wC_MT_woC<-results(ddsMF_calc,contrast=c("IA","spl7_mutant0.0_mM_Cu","spl7_mutant0.5_mM_Cu"),alpha=0.05)
+MT_wC_MT_woC$padj[Cooks_max>defaultCutoff]<-NA
+
+MT_wC_MT_woC_sig<-as.data.frame(MT_wC_MT_woC[which(MT_wC_MT_woC$padj<=0.05&(MT_wC_MT_woC$log2FoldChange>=1|MT_wC_MT_woC$log2FoldChange<=(-1))),])
+write.table(MT_wC_MT_woC_sig,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Results_multiFactor_analysis/Mutant_without_Copper_vs_Mutant_with_Copper_sig.txt",
+            sep = "\t",
+            row.names = TRUE)
+###Add Annotation
+#setwd("/home/mkrause/Marcus/Von Server/Counts/")
+Anno <- read.delim("./../Von Server/Counts/Araport_funct_descr", header = FALSE)
+
+# Mutant_with_Copper_vs_Mutant_without_Copper
+MT_wC_MT_woC_sig$V1 <- rownames(MT_wC_MT_woC_sig)
+head(MT_wC_MT_woC_sig)
+MT_wC_MT_woC_sig_w_description <- merge(MT_wC_MT_woC_sig,
+                                          Anno,
+                                          by = "V1",
+                                          all.x = TRUE)
+rownames(MT_wC_MT_woC_sig_w_description) <- MT_wC_MT_woC_sig_w_description$V1
+MT_wC_MT_woC_sig_w_description$V1 <- NULL
+MT_wC_MT_woC_sig$V1 <- NULL
+write.table(MT_wC_MT_woC_sig_w_description,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Results_multiFactor_analysis/Mutant_without_Copper_vs_Mutant_with_Copper_sig_anno.txt",
+            col.names = TRUE,
+            row.names = TRUE,
+            sep = "\t")
+
+ # Wildtype_with_Copper_vs_Wildtype_without_Copper
+WT_wC_WT_woC_sig$V1 <- rownames(WT_wC_WT_woC_sig)
+WT_wC_WT_woC_sig_w_description <- merge(WT_wC_WT_woC_sig,
+                                          Anno,
+                                          by = "V1",
+                                          all.x = TRUE)
+rownames(WT_wC_WT_woC_sig_w_description) <- WT_wC_WT_woC_sig_w_description$V1
+WT_wC_WT_woC_sig_w_description$V1 <- NULL
+WT_wC_WT_woC_sig$V1 <- NULL
+write.table(WT_wC_WT_woC_sig_w_description,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Results_multiFactor_analysis/Wildtype_without_Copper_vs_Wildtype_with_Copper_sig_anno.txt",
+            col.names = TRUE,
+            row.names = TRUE,
+            sep = "\t")
+
+ # Mutant_with_Copper_vs_Wildtype_with_Copper
+WT_MT_wC_sig$V1 <- rownames(WT_MT_wC_sig)
+WT_MT_wC_sig_w_description <- merge(WT_MT_wC_sig,
+                                          Anno,
+                                          by = "V1",
+                                          all.x = TRUE)
+rownames(WT_MT_wC_sig_w_description) <- WT_MT_wC_sig_w_description$V1
+WT_MT_wC_sig_w_description$V1 <- NULL
+WT_MT_wC_sig$V1 <- NULL
+write.table(WT_MT_wC_sig_w_description,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Results_multiFactor_analysis/Mutant_with_Copper_vs_Wildtype_with_Copper_sig_anno.txt",
+            col.names = TRUE,
+            row.names = TRUE,
+            sep = "\t")
+
+ # Mutant_without_Copper_vs_Wildtype_without_Copper
+WT_MT_woC_sig$V1 <- rownames(WT_MT_woC_sig)
+WT_MT_woC_sig_w_description <- merge(WT_MT_woC_sig,
+                                          Anno,
+                                          by = "V1",
+                                          all.x = TRUE)
+rownames(WT_MT_woC_sig_w_description) <- WT_MT_woC_sig_w_description$V1
+WT_MT_woC_sig_w_description$V1 <- NULL
+WT_MT_woC_sig$V1 <- NULL
+write.table(WT_MT_woC_sig_w_description,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Results_multiFactor_analysis/Mutant_without_Copper_vs_Wildtype_without_Copper_sig_anno.txt",
+            col.names = TRUE,
+            row.names = TRUE,
+            sep = "\t")
+
+###Volcano plots
+WT_MT_wC
+summary(WT_MT_wC)
+plot(WT_MT_wC$log2FoldChange, 
+     -log10(WT_MT_wC$pvalue),
+     panel.first=grid(),
+     main="Volcano plot spl7 +Cu+ vs. WT +Cu", 
+     xlab="Effect size: log2(fold-change)",
+     ylab="-log10(adjusted p-value)",
+     pch=20, cex=0.4)
+with(subset(WT_MT_wC, padj<.05 & abs(log2FoldChange)>1), points(log2FoldChange, -log10(pvalue), pch=20, col="red"))
+
+WT_MT_woC
+summary(WT_MT_woC)
+plot(WT_MT_woC$log2FoldChange, 
+     -log10(WT_MT_woC$pvalue),
+     panel.first=grid(),
+     main="Volcano plot spl7 -Cu vs. WT -Cu", 
+     xlab="Effect size: log2(fold-change)",
+     ylab="-log10(adjusted p-value)",
+     pch=20, cex=0.4)
+with(subset(WT_MT_woC, padj<.05 & abs(log2FoldChange)>1), points(log2FoldChange, -log10(pvalue), pch=20, col="red"))
+
+WT_wC_WT_woC
+summary(WT_wC_WT_woC)
+plot(WT_wC_WT_woC$log2FoldChange, 
+     -log10(WT_wC_WT_woC$pvalue),
+     panel.first=grid(),
+     main="Volcano plot WT -Cu vs. WT +Cu", 
+     xlab="Effect size: log2(fold-change)",
+     ylab="-log10(adjusted p-value)",
+     pch=20, cex=0.4)
+with(subset(WT_wC_WT_woC, padj<.05 & abs(log2FoldChange)>1), points(log2FoldChange, -log10(pvalue), pch=20, col="red"))
+
+MT_wC_MT_woC
+summary(MT_wC_MT_woC)
+plot(MT_wC_MT_woC$log2FoldChange, 
+     -log10(MT_wC_MT_woC$pvalue),
+     panel.first=grid(),
+     main="Volcano plot spl7 -Cu vs. spl7 +Cu", 
+     xlab="Effect size: log2(fold-change)",
+     ylab="-log10(adjusted p-value)",
+     pch=20, cex=0.4)
+with(subset(MT_wC_MT_woC, padj<.05 & abs(log2FoldChange)>1), points(log2FoldChange, -log10(pvalue), pch=20, col="red"))
+```
+
+## Surrogate Variables
+
+```{r}
+#path1: /home/mkrause/Desktop/NB/
+#path2: D:/Uni/NB/
+RawCounts3 <- read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/SVA/RawCountsSVA.txt", sep = "\t", header = T)
+col.data2 <- read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/SVA/coldata.txt", header = T)
+rownames(RawCounts3) <- RawCounts3$V1
+RawCounts3$V1 <- NULL
+dds <- DESeqDataSetFromMatrix(countData = RawCounts3,
+                              colData = col.data2,
+                              #design =                               ###  Many R formula are valid, including designs with multiple variables, e.g., ~ group + condition, and designs with interactions, e.g., ~ genotype + treatment + genotype:treatment. See results for a variety of designs and how to extract results tables
+                              design = ~Combination) # "Normal" - for SUV since SUV detects Replicate difference
+                              #design = ~ Genotype + Treatment)        
+                              #design = ~ Replicate + Combination)     
+#design = ~ Genotype + Treatment+Replicate)
+#design = ~Genotype + Treatment + Genotype:Treatment) # Interaction
+
+dds_calc <- DESeq(dds,
+                  test = "Wald",       ### For the Wald test, stat is the Wald statistic: the log2FoldChange divided by lfcSE, which is compared to a standard Normal distribution to generate a two-tailed pvalue. 
+                  fitType = "local")
+
+#########Calculation of sva (surrrogate variable) - batch effect normalisation
+#rm(dds_calc)
+#dds_calc <- estimateSizeFactors(dds)
+#dds_calc <- DESeq(dds,
+#                  test = "Wald",    ### For the Wald test, stat is the Wald statistic: the log2FoldChange divided by lfcSE, which is compared to a standard Normal distribution to generate a two-tailed pvalue. 
+#                  fitType = "local")
+
+
+dat  <- counts(dds_calc, normalized = TRUE)
+idx  <- rowMeans(dat) > 1
+dat  <- dat[idx, ]
+mod  <- model.matrix(~ Combination, colData(dds_calc))
+mod0 <- model.matrix(~   1, colData(dds_calc))
+svseq_rep_comb <- svaseq(dat, mod, mod0, n.sv = 2)
+svseq_rep_comb$sv
+par(mfrow = c(2, 1), mar = c(3,5,3,1))
+###plot for variables
+for (i in 1:2) {
+  stripchart(svseq_rep_comb$sv[, i] ~ dds_calc$Combination, vertical = TRUE, main = paste0("SV", i))
+  abline(h = 0)
+}
+
+#adds variables to DESeq dataset
+ddssva_rep_comb <- dds_calc
+ddssva_rep_comb$SV1 <- svseq_rep_comb$sv[,1]
+ddssva_rep_comb$SV2 <- svseq_rep_comb$sv[,2]
+
+design(ddssva_rep_comb) <- ~ SV1 + SV2 + Combination ######### neues design
+###Re-calcualate DEG´s consdering sva
+ddssuv <- DESeq(ddssva_rep_comb, fitType = "local")  
+
+svDcWT <- results(ddssuv, contrast = c("Combination","WTwoCu","WTwCu"), alpha = 0.05) ################ test
+svDcw<- results(ddssuv, contrast = c("Combination","MTwCu","WTwCu"), alpha = 0.05) ############## ddssva_rep_comb
+svDcMT<- results(ddssuv, contrast = c("Combination","MTwoCu","MTwCu"), alpha = 0.05)
+svDcwo<- results(ddssuv, contrast = c("Combination","MTwoCu","WTwoCu"), alpha = 0.05)
+
+svDcWT_sig<-(svDcWT[which(svDcWT$padj<0.05&(svDcWT$log2FoldChange>=1|svDcWT$log2FoldChange<=(-1))),]) ####### 1 , 0.5
+summary(svDcWT_sig)
+svDcw_sig<-(svDcw[which(svDcw$padj<0.05&(svDcw$log2FoldChange>=1|svDcw$log2FoldChange<=(-1))),])
+summary(svDcw_sig)
+
+svDcMT_sig<-(svDcMT[which(svDcMT$padj<0.05&(svDcMT$log2FoldChange>=1|svDcMT$log2FoldChange<=(-1))),])
+summary(svDcMT_sig)
+svDcwo_sig<-as.data.frame(svDcwo[which(svDcwo$padj<0.05&(svDcwo$log2FoldChange>=1|svDcwo$log2FoldChange<=(-1))),])
+summary(svDcwo_sig)
+## Tresholds: adj. p-value of 0.05; LFC 1/-1
+svDcWT_sig<-as.data.frame(svDcWT[which(svDcWT$padj<0.05&(svDcWT$log2FoldChange>=1|svDcWT$log2FoldChange<=(-1))),]) ####### 1 , 0.5
+write.table(svDcWT_sig,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/SVA/Wildtype_without_Copper_vs_Wildtype_with_Copper_sig.txt",
+            sep = "\t",
+            row.names = TRUE)
+svDcw_sig<-as.data.frame(svDcw[which(svDcw$padj<0.05&(svDcw$log2FoldChange>=1|svDcw$log2FoldChange<=(-1))),])
+write.table(svDcw_sig,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/SVA/Mutant_with_Copper_vs_Wildtype_with_Copper_sig.txt",
+            sep = "\t",
+            row.names = TRUE)
+svDcMT_sig<-as.data.frame(svDcMT[which(svDcMT$padj<0.05&(svDcMT$log2FoldChange>=1|svDcMT$log2FoldChange<=(-1))),])
+write.table(svDcMT_sig,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/SVA/Mutant_without_Copper_vs_Mutant_with_Copper_sig.txt",
+            sep = "\t",
+            row.names = TRUE)
+svDcwo_sig<-as.data.frame(svDcwo[which(svDcwo$padj<0.05&(svDcwo$log2FoldChange>=1|svDcwo$log2FoldChange<=(-1))),])
+write.table(svDcwo_sig,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/SVA/Munatnt_without_Copper_vs_Wildtype_without_Copper_sig.txt",
+            sep = "\t",
+            row.names = TRUE)
+
+###Add Annotation
+#setwd("/home/mkrause/Marcus/Von Server/Counts/")
+Anno <- read.delim("./../Von Server/Counts/Araport_funct_descr", header = FALSE)
+
+# Wildtype_without_Copper_vs_Wildtype_with_Copper
+svDcWT_sig$V1 <- rownames(svDcWT_sig)
+head(svDcWT_sig)
+svDcWT_sig_w_description <- merge(svDcWT_sig,
+                                          Anno,
+                                          by = "V1",
+                                          all.x = TRUE)
+rownames(svDcWT_sig_w_description) <- svDcWT_sig_w_description$V1
+svDcWT_sig_w_description$V1 <- NULL
+svDcWT_sig$V1 <- NULL
+write.table(svDcWT_sig_w_description,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/SVA/Wildtype_without_Copper_vs_Wildtype_with_Copper_sig_anno.txt",
+            col.names = TRUE,
+            row.names = TRUE,
+            sep = "\t")
+
+ # Mutant_with_Copper_vs_Wildtype_with_Copper
+svDcw_sig$V1 <- rownames(svDcw_sig)
+svDcw_sig_w_description <- merge(svDcw_sig,
+                                          Anno,
+                                          by = "V1",
+                                          all.x = TRUE)
+rownames(svDcw_sig_w_description) <- svDcw_sig_w_description$V1
+svDcw_sig_w_description$V1 <- NULL
+svDcw_sig$V1 <- NULL
+write.table(svDcw_sig_w_description,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/SVA/Mutant_with_Copper_vs_Wildtype_with_Copper_sig_anno.txt",
+            col.names = TRUE,
+            row.names = TRUE,
+            sep = "\t")
+
+ # Mutant_without_Copper_vs_Mutant_with_Copper
+svDcMT_sig$V1 <- rownames(svDcMT_sig)
+svDcMT_sig_w_description <- merge(svDcMT_sig,
+                                          Anno,
+                                          by = "V1",
+                                          all.x = TRUE)
+rownames(svDcMT_sig_w_description) <- svDcMT_sig_w_description$V1
+svDcMT_sig_w_description$V1 <- NULL
+svDcMT_sig$V1 <- NULL
+write.table(svDcMT_sig_w_description,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/SVA/Mutant_without_Copper_vs_Mutant_with_Copper_sig_anno.txt",
+            col.names = TRUE,
+            row.names = TRUE,
+            sep = "\t")
+
+# Mutant_without_Copper_vs_Wildtype_without_Copper
+svDcwo_sig$V1 <- rownames(svDcwo_sig)
+svDcwo_sig_w_description <- merge(svDcwo_sig,
+                                          Anno,
+                                          by = "V1",
+                                          all.x = TRUE)
+rownames(svDcwo_sig_w_description) <- svDcwo_sig_w_description$V1
+svDcwo_sig_w_description$V1 <- NULL
+svDcwo_sig$V1 <- NULL
+write.table(svDcwo_sig_w_description,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/SVA/Mutant_without_Copper_vs_Wildtype_without_Copper_sig_anno.txt",
+            col.names = TRUE,
+            row.names = TRUE,
+            sep = "\t")
+
+###Volcano plots
+svDcw
+summary(svDcw)
+plot(svDcw$log2FoldChange, 
+     -log10(svDcw$pvalue),
+     panel.first=grid(),
+     main="Volcano plot spl7 +Cu vs. WT +Cu", 
+     xlab="Effect size: log2(fold-change)",
+     ylab="-log10(adjusted p-value)",
+     pch=20, cex=0.4)
+with(subset(svDcw, padj<.05 & abs(log2FoldChange)>1), points(log2FoldChange, -log10(pvalue), pch=20, col="red"))
+
+svDcwo
+summary(svDcwo)
+plot(svDcwo$log2FoldChange, 
+     -log10(svDcwo$pvalue),
+     panel.first=grid(),
+     main="Volcano plot spl7 -Cu vs. WT -Cu", 
+     xlab="Effect size: log2(fold-change)",
+     ylab="-log10(adjusted p-value)",
+     pch=20, cex=0.4)
+with(subset(svDcwo, padj<.05 & abs(log2FoldChange)>1), points(log2FoldChange, -log10(pvalue), pch=20, col="red"))
+
+svDcWT
+summary(svDcWT)
+plot(svDcWT$log2FoldChange, 
+     -log10(svDcWT$pvalue),
+     panel.first=grid(),
+     main="Volcano plot WT -Cu vs. WT +Cu", 
+     xlab="Effect size: log2(fold-change)",
+     ylab="-log10(adjusted p-value)",
+     pch=20, cex=0.4)
+with(subset(svDcWT, padj<.05 & abs(log2FoldChange)>1), points(log2FoldChange, -log10(pvalue), pch=20, col="red"))
+
+svDcMT
+summary(svDcMT)
+plot(svDcMT$log2FoldChange, 
+     -log10(svDcMT$pvalue),
+     panel.first=grid(),
+     main="Volcano plot spl7 +Cu vs. spl7 -Cu", 
+     xlab="Effect size: log2(fold-change)",
+     ylab="-log10(adjusted p-value)",
+     pch=20, cex=0.4)
+with(subset(svDcMT, padj<.05 & abs(log2FoldChange)>1), points(log2FoldChange, -log10(pvalue), pch=20, col="red"))
+
+```
+
+## DEG excluding "bad" replicates
+
+```{r}
+
+#####Bad Samples according to PCA
+##Bad Samples
+#SPL7-Cu+ R3
+#WTCu- R3
+#WTCu+ R3
+
+RawCounts <- read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Replicates_excluded/RawCounts.txt", sep = "\t", header = T)
+head(RawCounts)
+RawCounts$spl7wCu_R2 <- NULL
+RawCounts$WTwoCu_R3 <- NULL
+RawCounts$WTwCu_R3 <- NULL
+head(RawCounts)
+
+col.data2 <- read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Replicates_excluded/coldata_reps.txt", header = T)
+head(col.data2)
+rownames(RawCounts) <- RawCounts$V1
+RawCounts$V1 <- NULL
+head(RawCounts)
+ddsR <- DESeqDataSetFromMatrix(countData = RawCounts,
+                              colData = col.data2,
+                              #design =                               ###  Many R formula are valid, including designs with multiple variables, e.g., ~ group + condition, and designs with interactions, e.g., ~ genotype + treatment + genotype:treatment. See results for a variety of designs and how to extract results tables
+                              design = ~Combination) # "Normal" - for SUV since SUV detects Replicate difference
+#design = ~ Genotype + Treatment)        
+#design = ~ Replicate + Combination)     
+#design = ~ Genotype + Treatment+Replicate)
+#design = ~Genotype + Treatment + Genotype:Treatment) # Interaction
+
+###Rlog clustering
+LogR <- rlog(ddsR, blind = FALSE, fitType = "local")
+sampleDists_R <- dist( t( assay(LogR) ) )
+
+hcluster_R <- hclust(sampleDists_R,method="ward.D2")
+plot(hcluster_R)
+
+
+dds_calcR <- DESeq(ddsR,
+                  test = "Wald",       ### For the Wald test, stat is the Wald statistic: the log2FoldChange divided by lfcSE, which is compared to a standard Normal distribution to generate a two-tailed pvalue. 
+                  fitType = "local")
+
+resultsNames(dds_calcR)
+
+###Results
+WT <- results(dds_calcR, contrast = c("Combination","WTwoCu","WTwCu"), alpha = 0.05)
+MT_vs_WT_w_Cu <- results(dds_calcR, contrast = c("Combination","MTwCu","WTwCu"), alpha = 0.05)
+MT <- results(dds_calcR, contrast = c("Combination","MTwoCu","MTwCu"), alpha = 0.05)
+MT_vs_WT_wo_Cu <- results(dds_calcR, contrast = c("Combination","MTwoCu","WTwoCu"), alpha = 0.05)
+
+summary(WT)
+summary(MT_vs_WT_w_Cu)
+
+summary(MT)
+summary(MT_vs_WT_wo_Cu)
+
+## Tresholds: adj. p-value of 0.05; LFC 1/-1
+WT_sig<-as.data.frame(WT[which(WT$padj<0.05&(WT$log2FoldChange>=1|WT$log2FoldChange<=(-1))),]) ####### 1 , 0.5
+write.table(WT_sig,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Replicates_excluded/Wildtype_without_Copper_vs_Wildtype_with_Copper_sig.txt",
+            sep = "\t",
+            row.names = TRUE)
+MT_vs_WT_w_Cu_sig<-as.data.frame(MT_vs_WT_w_Cu[which(MT_vs_WT_w_Cu$padj<0.05&(MT_vs_WT_w_Cu$log2FoldChange>=1|MT_vs_WT_w_Cu$log2FoldChange<=(-1))),])
+write.table(MT_vs_WT_w_Cu_sig,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Replicates_excluded/Mutant_with_Copper_vs_Wildtype_with_Copper_sig.txt",
+            sep = "\t",
+            row.names = TRUE)
+MT_sig<-as.data.frame(MT[which(MT$padj<0.05&(MT$log2FoldChange>=1|MT$log2FoldChange<=(-1))),])
+write.table(MT_sig,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Replicates_excluded/Mutant_without_Copper_vs_Mutant_with_Copper_sig.txt",
+            sep = "\t",
+            row.names = TRUE)
+MT_vs_WT_wo_Cu_sig<-as.data.frame(MT_vs_WT_wo_Cu[which(MT_vs_WT_wo_Cu$padj<0.05&(MT_vs_WT_wo_Cu$log2FoldChange>=1|MT_vs_WT_wo_Cu$log2FoldChange<=(-1))),])
+write.table(MT_vs_WT_wo_Cu_sig,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Replicates_excluded/Munatnt_without_Copper_vs_Wildtype_without_Copper_sig.txt",
+            sep = "\t",
+            row.names = TRUE)
+
+###Add Annotation
+#setwd("/home/mkrause/Marcus/Von Server/Counts/")
+Anno <- read.delim("~/Documents/PostDoc/Projects/SPL7 - Anna/Marcus/Von Server/Counts/Araport_funct_descr", header = FALSE)
+
+# Wildtype_without_Copper_vs_Wildtype_with_Copper
+WT_sig$V1 <- rownames(WT_sig)
+head(WT_sig)
+WT_sig_description <- merge(WT_sig,
+                                  Anno,
+                                  by = "V1",
+                                  all.x = TRUE)
+rownames(WT_sig_description) <- WT_sig_description$V1
+WT_sig_description$V1 <- NULL
+WT_sig$V1 <- NULL
+write.table(WT_sig_description,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Replicates_excluded/Wildtype_without_Copper_vs_Wildtype_with_Copper_sig_anno.txt",
+            col.names = TRUE,
+            row.names = TRUE,
+            sep = "\t")
+
+# Mutant_with_Copper_vs_Wildtype_with_Copper
+MT_vs_WT_w_Cu_sig$V1 <- rownames(MT_vs_WT_w_Cu_sig)
+MT_vs_WT_w_Cu_sig_description <- merge(MT_vs_WT_w_Cu_sig,
+                                 Anno,
+                                 by = "V1",
+                                 all.x = TRUE)
+rownames(MT_vs_WT_w_Cu_sig_description) <- MT_vs_WT_w_Cu_sig_description$V1
+MT_vs_WT_w_Cu_sig_description$V1 <- NULL
+MT_vs_WT_w_Cu_sig$V1 <- NULL
+write.table(MT_vs_WT_w_Cu_sig_description,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Replicates_excluded/Mutant_with_Copper_vs_Wildtype_with_Copper_sig_anno.txt",
+            col.names = TRUE,
+            row.names = TRUE,
+            sep = "\t")
+
+# Mutant_without_Copper_vs_Mutant_with_Copper
+MT_sig$V1 <- rownames(MT_sig)
+MT_sig_w_description <- merge(MT_sig,
+                                  Anno,
+                                  by = "V1",
+                                  all.x = TRUE)
+rownames(MT_sig_w_description) <- MT_sig_w_description$V1
+MT_sig_w_description$V1 <- NULL
+MT_sig$V1 <- NULL
+write.table(MT_sig_w_description,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Replicates_excluded/Mutant_without_Copper_vs_Mutant_with_Copper_sig_anno.txt",
+            col.names = TRUE,
+            row.names = TRUE,
+            sep = "\t")
+
+# Mutant_without_Copper_vs_Wildtype_without_Copper
+MT_vs_WT_wo_Cu_sig$V1 <- rownames(MT_vs_WT_wo_Cu_sig)
+MT_vs_WT_wo_Cu_sig_w_description <- merge(MT_vs_WT_wo_Cu_sig,
+                                  Anno,
+                                  by = "V1",
+                                  all.x = TRUE)
+rownames(MT_vs_WT_wo_Cu_sig_w_description) <- MT_vs_WT_wo_Cu_sig_w_description$V1
+MT_vs_WT_wo_Cu_sig_w_description$V1 <- NULL
+MT_vs_WT_wo_Cu_sig$V1 <- NULL
+write.table(MT_vs_WT_wo_Cu_sig_w_description,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Replicates_excluded/Mutant_without_Copper_vs_Wildtype_without_Copper_sig_anno.txt",
+            col.names = TRUE,
+            row.names = TRUE,
+            sep = "\t")
+
+
+###Volcano plots
+MT_vs_WT_w_Cu
+summary(MT_vs_WT_w_Cu)
+plot(MT_vs_WT_w_Cu$log2FoldChange, 
+     -log10(MT_vs_WT_w_Cu$pvalue),
+     panel.first=grid(),
+     main="Volcano plot spl7 +Cu vs. WT +Cu", 
+     xlab="Effect size: log2(fold-change)",
+     ylab="-log10(adjusted p-value)",
+     pch=20, cex=0.4)
+with(subset(MT_vs_WT_w_Cu, padj<.05 & abs(log2FoldChange)>1), points(log2FoldChange, -log10(pvalue), pch=20, col="red"))
+
+MT_vs_WT_wo_Cu
+summary(MT_vs_WT_wo_Cu)
+plot(MT_vs_WT_wo_Cu$log2FoldChange, 
+     -log10(MT_vs_WT_wo_Cu$pvalue),
+     panel.first=grid(),
+     main="Volcano plot spl7 -Cu vs. WT -Cu", 
+     xlab="Effect size: log2(fold-change)",
+     ylab="-log10(adjusted p-value)",
+     pch=20, cex=0.4)
+with(subset(MT_vs_WT_wo_Cu, padj<.05 & abs(log2FoldChange)>1), points(log2FoldChange, -log10(pvalue), pch=20, col="red"))
+
+WT
+summary(WT)
+plot(WT$log2FoldChange, 
+     -log10(WT$pvalue),
+     panel.first=grid(),
+     main="Volcano plot WT -Cu vs. WT +Cu", 
+     xlab="Effect size: log2(fold-change)",
+     ylab="-log10(adjusted p-value)",
+     pch=20, cex=0.4)
+with(subset(WT, padj<.05 & abs(log2FoldChange)>1), points(log2FoldChange, -log10(pvalue), pch=20, col="red"))
+
+MT
+summary(MT)
+plot(MT$log2FoldChange, 
+     -log10(MT$pvalue),
+     panel.first=grid(),
+     main="Volcano plot spl7 +Cu vs. spl7 -Cu", 
+     xlab="Effect size: log2(fold-change)",
+     ylab="-log10(adjusted p-value)",
+     pch=20, cex=0.4)
+with(subset(MT, padj<.05 & abs(log2FoldChange)>1), points(log2FoldChange, -log10(pvalue), pch=20, col="red"))
+
+
+```
+
+## seperate normalisation
+
+```{r}
+
+RawCounts_sep <- read.table("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/seperate/RawCounts.txt", sep = "\t", header = T)
+
+WT_Cu_sep=data.frame(RawCounts_sep$V1, RawCounts_sep$WTwCu_R1, RawCounts_sep$WTwCu_R2, RawCounts_sep$WTwCu_R3, RawCounts_sep$WTwoCu_R1, RawCounts_sep$WTwoCu_R2, RawCounts_sep$WTwoCu_R3)
+colnames(WT_Cu_sep)=c("AGI","WTwCu_R1","WTwCu_R2","WTwCu_R3","WTwoCu_R1","WTwoCu_R2","WTwoCu_R3")
+view(WT_Cu_sep)
+write.table(WT_Cu_sep,sep = "\t", "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/seperate/WT_Cu_seperated.txt", row.names = FALSE)
+row.names(WT_Cu_sep)=WT_Cu_sep$AGI
+WT_Cu_sep$AGI <- NULL
+conds<-factor(c("a","a","a","b","b","b"))
+head(conds)
+ddsWT_Cu_sep <- DESeqDataSetFromMatrix(WT_Cu_sep,DataFrame(conds),~ conds)
+
+MT_Cu_sep=data.frame(RawCounts_sep$V1, RawCounts_sep$spl7wCu_R1, RawCounts_sep$spl7wCu_R2, RawCounts_sep$spl7wCu_R3, RawCounts_sep$spl7woCu_R1, RawCounts_sep$spl7woCu_R2, RawCounts_sep$spl7woCu_R3)
+colnames(MT_Cu_sep)=c("AGI","spl7wCu_R1","spl7wCu_R2","spl7wCu_R3","spl7woCu_R1","spl7woCu_R2","spl7woCu_R3")
+view(MT_Cu_sep)
+write.table(MT_Cu_sep,sep = "\t", "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/seperate/MT_Cu_seperate.txt", row.names = FALSE)
+row.names(MT_Cu_sep)=MT_Cu_sep$AGI
+MT_Cu_sep$AGI <- NULL
+conds<-factor(c("a","a","a","b","b","b"))
+head(conds)
+ddsMT_Cu_sep <- DESeqDataSetFromMatrix(MT_Cu_sep,DataFrame(conds),~ conds)
+
+MTWT_wCu_sep=data.frame(RawCounts_sep$V1, RawCounts_sep$WTwCu_R1, RawCounts_sep$WTwCu_R2, RawCounts_sep$WTwCu_R3, RawCounts_sep$spl7wCu_R1, RawCounts_sep$spl7wCu_R2, RawCounts_sep$spl7wCu_R3)
+colnames(MTWT_wCu_sep)=c("AGI","WTwCu_R1","WTwCu_R2","WTwCu_R3","spl7wCu_R1","spl7wCu_R2","spl7wCu_R3")
+view(MTWT_wCu_sep)
+write.table(MTWT_wCu_sep,sep = "\t", "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/seperate/WTMT_wCu_seperated.txt", row.names = FALSE)
+row.names(MTWT_wCu_sep)=MTWT_wCu_sep$AGI
+MTWT_wCu_sep$AGI <- NULL
+conds<-factor(c("a","a","a","b","b","b"))
+head(conds)
+ddsMTWT_wCu_sep <- DESeqDataSetFromMatrix(MTWT_wCu_sep,DataFrame(conds),~ conds)
+
+MTWT_woCu_sep=data.frame(RawCounts_sep$V1, RawCounts_sep$WTwCu_R1, RawCounts_sep$WTwCu_R2, RawCounts_sep$WTwCu_R3, RawCounts_sep$spl7woCu_R1, RawCounts_sep$spl7woCu_R2, RawCounts_sep$spl7woCu_R3)
+colnames(MTWT_woCu_sep)=c("AGI","WTwoCu_R1","WTwoCu_R2","WTwoCu_R3","spl7woCu_R1","spl7woCu_R2","spl7woCu_R3")
+view(MTWT_woCu_sep)
+write.table(MTWT_woCu_sep,sep = "\t", "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/seperate/WT_Cu_seperated.txt", row.names = FALSE)
+row.names(MTWT_woCu_sep)=MTWT_woCu_sep$AGI
+MTWT_woCu_sep$AGI <- NULL
+conds<-factor(c("a","a","a","b","b","b"))
+head(conds)
+ddsMTWT_woCu_sep <- DESeqDataSetFromMatrix(MTWT_woCu_sep,DataFrame(conds),~ conds)
+
+#### Calculating DESeq2
+dds_calcWT_Cu_sep <- DESeq(ddsWT_Cu_sep,
+                           test = "Wald",       ### For the Wald test, stat is the Wald statistic: the log2FoldChange divided by lfcSE, which is compared to a standard Normal distribution to generate a two-tailed pvalue. 
+                           fitType = "local")
+dds_calcMT_Cu_sep <- DESeq(ddsMT_Cu_sep,
+                           test = "Wald",       ### For the Wald test, stat is the Wald statistic: the log2FoldChange divided by lfcSE, which is compared to a standard Normal distribution to generate a two-tailed pvalue. 
+                           fitType = "local")
+dds_calcMTWT_wCu_sep <- DESeq(ddsMTWT_wCu_sep,
+                           test = "Wald",       ### For the Wald test, stat is the Wald statistic: the log2FoldChange divided by lfcSE, which is compared to a standard Normal distribution to generate a two-tailed pvalue. 
+                           fitType = "local")
+dds_calcMTWT_woCu_sep <- DESeq(ddsMTWT_woCu_sep,
+                           test = "Wald",       ### For the Wald test, stat is the Wald statistic: the log2FoldChange divided by lfcSE, which is compared to a standard Normal distribution to generate a two-tailed pvalue. 
+                           fitType = "local")
+
+resWT_Cu_sep <- results(dds_calcWT_Cu_sep, contrast = c("conds","b","a"), alpha = 0.05)
+resMT_Cu_sep <- results(dds_calcMT_Cu_sep, contrast = c("conds","b","a"), alpha = 0.05)
+resMTWT_wCu_sep <- results(dds_calcMTWT_wCu_sep, contrast = c("conds","b","a"), alpha = 0.05)
+resMTWT_woCu_sep <- results(dds_calcMTWT_woCu_sep, contrast = c("conds","b","a"), alpha = 0.05)
+
+resWT_Cu_sep_sig<-(resWT_Cu_sep[which(resWT_Cu_sep$padj<0.05&(resWT_Cu_sep$log2FoldChange>=1|resWT_Cu_sep$log2FoldChange<=(-1))),]) ####### 1 , 0.5
+summary(resWT_Cu_sep_sig)
+resMT_Cu_sep_sig<-(resMT_Cu_sep[which(resMT_Cu_sep$padj<0.05&(resMT_Cu_sep$log2FoldChange>=1|resMT_Cu_sep$log2FoldChange<=(-1))),])
+summary(resMT_Cu_sep_sig)
+
+resMTWT_wCu_sep_sig<-(resMTWT_wCu_sep[which(resMTWT_wCu_sep$padj<0.05&(resMTWT_wCu_sep$log2FoldChange>=1|resMTWT_wCu_sep$log2FoldChange<=(-1))),])
+summary(resMTWT_wCu_sep_sig)
+resMTWT_woCu_sep_sig<-(resMTWT_woCu_sep[which(resMTWT_woCu_sep$padj<0.05&(resMTWT_woCu_sep$log2FoldChange>=1|resMTWT_woCu_sep$log2FoldChange<=(-1))),])
+summary(resMTWT_woCu_sep_sig)
+
+## Tresholds: adj. p-value of 0.05; LFC 1/-1
+resWT_Cu_sep_sig<-as.data.frame(resWT_Cu_sep[which(resWT_Cu_sep$padj<0.05&(resWT_Cu_sep$log2FoldChange>=1|resWT_Cu_sep$log2FoldChange<=(-1))),]) ####### 1 , 0.5
+write.table(resWT_Cu_sep_sig,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/seperate/Wildtype_without_Copper_vs_Wildtype_with_Copper_sig_seperate.txt",
+            sep = "\t",
+            row.names = TRUE)
+resMTWT_wCu_sep_sig<-as.data.frame(resMTWT_wCu_sep[which(resMTWT_wCu_sep$padj<0.05&(resMTWT_wCu_sep$log2FoldChange>=1|resMTWT_wCu_sep$log2FoldChange<=(-1))),])
+write.table(resMTWT_wCu_sep_sig,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/seperate/Mutant_with_Copper_vs_Wildtype_with_Copper_sig.txt",
+            sep = "\t",
+            row.names = TRUE)
+resMT_Cu_sep_sig<-as.data.frame(resMT_Cu_sep[which(resMT_Cu_sep$padj<0.05&(resMT_Cu_sep$log2FoldChange>=1|resMT_Cu_sep$log2FoldChange<=(-1))),])
+write.table(resMT_Cu_sep_sig,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/seperate/Mutant_without_Copper_vs_Mutant_with_Copper_sig.txt",
+            sep = "\t",
+            row.names = TRUE)
+resMTWT_woCu_sep_sig<-as.data.frame(resMTWT_woCu_sep[which(resMTWT_woCu_sep$padj<0.05&(resMTWT_woCu_sep$log2FoldChange>=1|resMTWT_woCu_sep$log2FoldChange<=(-1))),])
+write.table(resMTWT_woCu_sep_sig,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/seperate/Munatnt_without_Copper_vs_Wildtype_without_Copper_sig.txt",
+            sep = "\t",
+            row.names = TRUE)
+
+###Add Annotation
+#setwd("/home/mkrause/Marcus/Von Server/Counts/")
+Anno <- read.delim("/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/normal_analysis/TAIR10_functional_descriptions_edit2.txt", header = TRUE)
+colnames(Anno)[1] <- "AGI"
+head(Anno)
+# Wildtype_without_Copper_vs_Wildtype_with_Copper
+resWT_Cu_sep_sig$AGI <- rownames(resWT_Cu_sep_sig)
+head(resWT_Cu_sep_sig)
+WT_Cu_sep$AGI <- rownames(WT_Cu_sep)
+resWT_Cu_sep_sig_counts <- merge(resWT_Cu_sep_sig, WT_Cu_sep, by = "AGI", all.x = TRUE)
+resWT_Cu_sep_sig_counts_description <- merge(resWT_Cu_sep_sig_counts,
+                                  Anno,
+                                  by = "AGI",
+                                  all.x = TRUE)
+write.table(resWT_Cu_sep_sig_counts_description,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/seperate/Wildtype_without_Copper_vs_Wildtype_with_Copper_sig_anno.txt",
+            col.names = TRUE,
+            row.names = TRUE,
+            sep = "\t")
+
+# Mutant_with_Copper_vs_Wildtype_with_Copper
+resMTWT_wCu_sep_sig$AGI <- rownames(resMTWT_wCu_sep_sig)
+head(resMTWT_wCu_sep_sig)
+MTWT_wCu_sep$AGI <- rownames(MTWT_wCu_sep)
+resMTWT_wCu_sep_sig_counts <- merge(resMTWT_wCu_sep_sig, MTWT_wCu_sep, by = "AGI", all.x = TRUE)
+resMTWT_wCu_sep_sig_counts_description <- merge(resMTWT_wCu_sep_sig_counts,
+                                             Anno,
+                                             by = "AGI",
+                                             all.x = TRUE)
+write.table(resMTWT_wCu_sep_sig_counts_description,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/seperate/Mutant_with_Copper_vs_Wildtype_with_Copper_sig_anno.txt",
+            col.names = TRUE,
+            row.names = TRUE,
+            sep = "\t")
+
+# Mutant_without_Copper_vs_Mutant_with_Copper
+resMT_Cu_sep_sig$AGI <- rownames(resMT_Cu_sep_sig)
+head(resMT_Cu_sep_sig)
+MT_Cu_sep$AGI <- rownames(MT_Cu_sep)
+resMT_Cu_sep_sig_counts <- merge(resMT_Cu_sep_sig, MT_Cu_sep, by = "AGI", all.x = TRUE)
+resMT_Cu_sep_sig_counts_description <- merge(resMT_Cu_sep_sig_counts,
+                                             Anno,
+                                             by = "AGI",
+                                             all.x = TRUE)
+write.table(resMT_Cu_sep_sig_counts_description,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/seperate/Mutant_without_Copper_vs_Mutant_with_Copper_sig_anno.txt",
+            col.names = TRUE,
+            row.names = TRUE,
+            sep = "\t")
+
+# Mutant_without_Copper_vs_Wildtype_without_Copper
+resMTWT_woCu_sep_sig$AGI <- rownames(resMTWT_woCu_sep_sig)
+head(resMTWT_woCu_sep_sig)
+MTWT_woCu_sep$AGI <- rownames(MTWT_woCu_sep)
+resMTWT_woCu_sep_sig_counts <- merge(resMTWT_woCu_sep_sig, WT_Cu_sep, by = "AGI", all.x = TRUE)
+resMTWT_woCu_sep_sig_counts_description <- merge(resMTWT_woCu_sep_sig_counts,
+                                             Anno,
+                                             by = "AGI",
+                                             all.x = TRUE)
+write.table(resMTWT_woCu_sep_sig_counts_description,
+            file = "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/seperate/Mutant_without_Copper_vs_Wildtype_without_Copper_sig_anno.txt",
+            col.names = TRUE,
+            row.names = TRUE,
+            sep = "\t")
+
+#####Volcano plots
+install.packages("calibrate")
+library(calibrate)
+
+resWT_Cu_sep
+summary(resWT_Cu_sep)
+plot(resWT_Cu_sep$log2FoldChange, 
+     -log10(resWT_Cu_sep$pvalue),
+     panel.first=grid(),
+     main="Volcano plot WT -Cu vs. WT +Cu", 
+     xlab="Effect size: log2(fold-change)",
+     ylab="-log10(adjusted p-value)",
+     pch=20, cex=0.4)
+with(subset(resWT_Cu_sep, padj<.05 & abs(log2FoldChange)>1), points(log2FoldChange, -log10(pvalue), pch=20, col="red"))
+
+resMT_Cu_sep
+summary(resMT_Cu_sep)
+plot(resMT_Cu_sep$log2FoldChange, 
+     -log10(resMT_Cu_sep$pvalue),
+     panel.first=grid(),
+     main="Volcano plot spl7 -Cu vs. spl7 +Cu", 
+     xlab="Effect size: log2(fold-change)",
+     ylab="-log10(adjusted p-value)",
+     pch=20, cex=0.4)
+with(subset(resMT_Cu_sep, padj<.05 & abs(log2FoldChange)>1), points(log2FoldChange, -log10(pvalue), pch=20, col="red"))
+
+resMTWT_wCu_sep
+summary(resMTWT_wCu_sep)
+plot(resMTWT_wCu_sep$log2FoldChange, 
+     -log10(resMTWT_wCu_sep$pvalue),
+     panel.first=grid(),
+     main="Volcano plot spl7 +Cu vs. WT +Cu", 
+     xlab="Effect size: log2(fold-change)",
+     ylab="-log10(adjusted p-value)",
+     pch=20, cex=0.4)
+with(subset(resMTWT_wCu_sep, padj<.05 & abs(log2FoldChange)>1), points(log2FoldChange, -log10(pvalue), pch=20, col="red"))
+
+resMTWT_woCu_sep
+summary(resMTWT_woCu_sep)
+plot(resMTWT_woCu_sep$log2FoldChange, 
+     -log10(resMTWT_woCu_sep$pvalue),
+     panel.first=grid(),
+     main="Volcano plot spl7 -Cu vs. WT -Cu", 
+     xlab="Effect size: log2(fold-change)",
+     ylab="-log10(adjusted p-value)",
+     pch=20, cex=0.4)
+with(subset(resMTWT_woCu_sep, padj<.05 & abs(log2FoldChange)>1), points(log2FoldChange, -log10(pvalue), pch=20, col="red"))
+
+```
+
+
+### Comparison with Interaction (unfinished)
+
+```{r}
+
+#####Bad Samples according to PCA
+##Bad Samples
+#SPL7-Cu+ R3
+#WTCu- R3
+#WTCu+ R3
+
+RawCountsInt <- read.table("~/Documents/PostDoc/Projects/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Interaction/RawCounts.txt", sep = "\t", header = T)
+head(RawCountsInt)
+
+col.data2 <- read.table("~/Documents/PostDoc/Projects/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Interaction/coldata.txt", header = T)
+head(col.data2)
+rownames(RawCountsInt) <- RawCounts$V1
+RawCountsInt$V1 <- NULL
+head(RawCountsInt)
+ddsInt <- DESeqDataSetFromMatrix(countData = RawCountsInt,
+                              colData = col.data2,
+                              #design =                               ###  Many R formula are valid, including designs with multiple variables, e.g., ~ group + condition, and designs with interactions, e.g., ~ genotype + treatment + genotype:treatment. See results for a variety of designs and how to extract results tables
+                              #design = ~Combination) # "Normal" - for SUV since SUV detects Replicate difference
+                              #design = ~ Genotype + Treatment)        
+                              #design = ~ Replicate + Combination)     
+                              #design = ~ Genotype + Treatment+Replicate)
+                              design = ~Genotype + Treatment + Genotype:Treatment) # Interaction
+
+###Rlog clustering
+LogInt <- rlog(ddsInt, blind = FALSE, fitType = "local")
+sampleDists_Int <- dist( t( assay(LogInt) ) )
+
+hcluster_Int <- hclust(sampleDists_Int,method="ward.D2")
+plot(hcluster_Int)
+
+
+dds_calcInt <- DESeq(ddsInt,
+                  test = "Wald",       ### For the Wald test, stat is the Wald statistic: the log2FoldChange divided by lfcSE, which is compared to a standard Normal distribution to generate a two-tailed pvalue. 
+                  fitType = "local")
+
+resultsNames(dds_calcInt)
+
+###Results
+WT <- results(dds_calcR, contrast = c("Combination","WTwoCu","WTwCu"), alpha = 0.05)
+MT_vs_WT_w_Cu <- results(dds_calcR, contrast = c("Combination","MTwCu","WTwCu"), alpha = 0.05)
+MT <- results(dds_calcR, contrast = c("Combination","MTwoCu","MTwCu"), alpha = 0.05)
+MT_vs_WT_wo_Cu <- results(dds_calcR, contrast = c("Combination","MTwoCu","WTwoCu"), alpha = 0.05)
+
+summary(WT)
+summary(MT_vs_WT_w_Cu)
+
+summary(MT)
+summary(MT_vs_WT_wo_Cu)
+
+## Tresholds: adj. p-value of 0.05; LFC 1/-1
+WT_sig<-as.data.frame(WT[which(WT$padj<0.05&(WT$log2FoldChange>=1|WT$log2FoldChange<=(-1))),]) ####### 1 , 0.5
+write.table(WT_sig,
+            file = "~/Documents/PostDoc/Projects/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Replicates_excluded/Wildtype_without_Copper_vs_Wildtype_with_Copper_sig.txt",
+            sep = "\t",
+            row.names = TRUE)
+MT_vs_WT_w_Cu_sig<-as.data.frame(MT_vs_WT_w_Cu[which(MT_vs_WT_w_Cu$padj<0.05&(MT_vs_WT_w_Cu$log2FoldChange>=1|MT_vs_WT_w_Cu$log2FoldChange<=(-1))),])
+write.table(MT_vs_WT_w_Cu_sig,
+            file = "~/Documents/PostDoc/Projects/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Replicates_excluded/Mutant_with_Copper_vs_Wildtype_with_Copper_sig.txt",
+            sep = "\t",
+            row.names = TRUE)
+MT_sig<-as.data.frame(MT[which(MT$padj<0.05&(MT$log2FoldChange>=1|MT$log2FoldChange<=(-1))),])
+write.table(MT_sig,
+            file = "~/Documents/PostDoc/Projects/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Replicates_excluded/Mutant_without_Copper_vs_Mutant_with_Copper_sig.txt",
+            sep = "\t",
+            row.names = TRUE)
+MT_vs_WT_wo_Cu_sig<-as.data.frame(MT_vs_WT_wo_Cu[which(MT_vs_WT_wo_Cu$padj<0.05&(MT_vs_WT_wo_Cu$log2FoldChange>=1|MT_vs_WT_wo_Cu$log2FoldChange<=(-1))),])
+write.table(MT_vs_WT_wo_Cu_sig,
+            file = "~/Documents/PostDoc/Projects/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Replicates_excluded/Munatnt_without_Copper_vs_Wildtype_without_Copper_sig.txt",
+            sep = "\t",
+            row.names = TRUE)
+
+###Add Annotation
+#setwd("/home/mkrause/Marcus/Von Server/Counts/")
+Anno <- read.delim("~/Documents/PostDoc/Projects/SPL7 - Anna/Marcus/Von Server/Counts/Araport_funct_descr", header = FALSE)
+
+# Wildtype_without_Copper_vs_Wildtype_with_Copper
+WT_sig$V1 <- rownames(WT_sig)
+head(WT_sig)
+WT_sig_description <- merge(WT_sig,
+                                  Anno,
+                                  by = "V1",
+                                  all.x = TRUE)
+rownames(WT_sig_description) <- WT_sig_description$V1
+WT_sig_description$V1 <- NULL
+WT_sig$V1 <- NULL
+write.table(WT_sig_description,
+            file = "~/Documents/PostDoc/Projects/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Replicates_excluded/Wildtype_without_Copper_vs_Wildtype_with_Copper_sig_anno.txt",
+            col.names = TRUE,
+            row.names = TRUE,
+            sep = "\t")
+
+# Mutant_with_Copper_vs_Wildtype_with_Copper
+MT_vs_WT_w_Cu_sig$V1 <- rownames(MT_vs_WT_w_Cu_sig)
+MT_vs_WT_w_Cu_sig_description <- merge(MT_vs_WT_w_Cu_sig,
+                                 Anno,
+                                 by = "V1",
+                                 all.x = TRUE)
+rownames(MT_vs_WT_w_Cu_sig_description) <- MT_vs_WT_w_Cu_sig_description$V1
+MT_vs_WT_w_Cu_sig_description$V1 <- NULL
+MT_vs_WT_w_Cu_sig$V1 <- NULL
+write.table(MT_vs_WT_w_Cu_sig_description,
+            file = "~/Documents/PostDoc/Projects/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Replicates_excluded/Mutant_with_Copper_vs_Wildtype_with_Copper_sig_anno.txt",
+            col.names = TRUE,
+            row.names = TRUE,
+            sep = "\t")
+
+# Mutant_without_Copper_vs_Mutant_with_Copper
+MT_sig$V1 <- rownames(MT_sig)
+MT_sig_w_description <- merge(MT_sig,
+                                  Anno,
+                                  by = "V1",
+                                  all.x = TRUE)
+rownames(MT_sig_w_description) <- MT_sig_w_description$V1
+MT_sig_w_description$V1 <- NULL
+MT_sig$V1 <- NULL
+write.table(MT_sig_w_description,
+            file = "~/Documents/PostDoc/Projects/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Replicates_excluded/Mutant_without_Copper_vs_Mutant_with_Copper_sig_anno.txt",
+            col.names = TRUE,
+            row.names = TRUE,
+            sep = "\t")
+
+# Mutant_without_Copper_vs_Wildtype_without_Copper
+MT_vs_WT_wo_Cu_sig$V1 <- rownames(MT_vs_WT_wo_Cu_sig)
+MT_vs_WT_wo_Cu_sig_w_description <- merge(MT_vs_WT_wo_Cu_sig,
+                                  Anno,
+                                  by = "V1",
+                                  all.x = TRUE)
+rownames(MT_vs_WT_wo_Cu_sig_w_description) <- MT_vs_WT_wo_Cu_sig_w_description$V1
+MT_vs_WT_wo_Cu_sig_w_description$V1 <- NULL
+MT_vs_WT_wo_Cu_sig$V1 <- NULL
+write.table(MT_vs_WT_wo_Cu_sig_w_description,
+            file = "~/Documents/PostDoc/Projects/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/Replicates_excluded/Mutant_without_Copper_vs_Wildtype_without_Copper_sig_anno.txt",
+            col.names = TRUE,
+            row.names = TRUE,
+            sep = "\t")
+
+
+
+```
+
+
+## "Chamber Effect"
+
+```{r}
+
+# WT
+dds_res_WT_int_sig_w_description$V1 <- rownames(dds_res_WT_int_sig_w_description) # Normal DESeq
+WT2_sig_w_description$V1 <- rownames(WT2_sig_w_description) # "Chamber-Effect"
+
+## WT1
+diff_WT_int_sig <- setdiff(dds_res_WT_int_sig_w_description$V1, WT2_sig_w_description$V1) # fertig machen
+diff_WT_with_anno <- as.data.frame(diff_WT_int_sig)
+diff_WT_with_anno$V1 <- diff_WT_with_anno$diff_WT_int_sig
+diff_WT_with_anno$diff_WT_int_sig <- NULL
+diff_WT_with_anno <- merge(diff_WT_with_anno,
+                                 Anno,
+                                 by = "V1",
+                                 all.x = TRUE)
+
+## WT2
+diff_WT_int_sig2 <- setdiff(WT2_sig_w_description$V1, dds_res_WT_int_sig_w_description$V1)
+diff_WT_with_anno2 <- as.data.frame(diff_WT_int_sig2)
+diff_WT_with_anno2$V1 <- diff_WT_with_anno2$diff_WT_int_sig2
+diff_WT_with_anno2$diff_WT_int_sig2 <- NULL
+diff_WT_with_anno2 <- merge(diff_WT_with_anno2,
+                           Anno,
+                           by = "V1",
+                           all.x = TRUE)
+
+# MT
+dds_res_MT_int_sig_w_description$V1 <- rownames(dds_res_MT_int_sig_w_description) # Normal DESeq
+MT2_sig_w_description$V1 <- rownames(MT2_sig_w_description) # "Chamber-Effect"
+
+## MT1
+diff_MT_int_sig <- setdiff(dds_res_MT_int_sig_w_description$V1, MT2_sig_w_description$V1)
+diff_MT_with_anno <- as.data.frame(diff_MT_int_sig)
+diff_MT_with_anno$V1 <- diff_MT_with_anno$diff_MT_int_sig
+diff_MT_with_anno$diff_MT_int_sig <- NULL
+diff_MT_with_anno <- merge(diff_MT_with_anno,
+                           Anno,
+                           by = "V1",
+                           all.x = TRUE)
+
+## MT2
+diff_MT_int_sig2 <- setdiff(MT2_sig_w_description$V1, dds_res_MT_int_sig_w_description$V1)
+diff_MT_with_anno2 <- as.data.frame(diff_MT_int_sig2)
+diff_MT_with_anno2$V1 <- diff_MT_with_anno2$diff_MT_int_sig2
+diff_MT_with_anno2$diff_MT_int_sig2 <- NULL
+diff_MT_with_anno2 <- merge(diff_MT_with_anno2,
+                            Anno,
+                            by = "V1",
+                            all.x = TRUE)
+
+# wCu
+dds_res_wCu_sig_w_description$V1 <- rownames(dds_res_wCu_sig_w_description) # Normal DESeq
+wCu2_sig_w_description$V1 <- rownames(wCu2_sig_w_description) # "Chamber-Effect"
+
+## wCu1
+diff_wCu_sig <- setdiff(dds_res_wCu_sig_w_description$V1, wCu2_sig_w_description$V1)
+diff_wCu_with_anno <- as.data.frame(diff_wCu_sig)
+diff_wCu_with_anno$V1 <- diff_wCu_with_anno$diff_wCu_sig
+diff_wCu_with_anno$diff_wCu_sig <- NULL
+diff_wCu_with_anno <- merge(diff_wCu_with_anno,
+                           Anno,
+                           by = "V1",
+                           all.x = TRUE)
+
+## wCu2
+diff_wCu_sig2 <- setdiff(wCu2_sig_w_description$V1, dds_res_wCu_sig_w_description$V1)
+diff_wCu_with_anno2 <- as.data.frame(diff_wCu_sig2)
+diff_wCu_with_anno2$V1 <- diff_wCu_with_anno2$diff_wCu_sig2
+diff_wCu_with_anno2$diff_wCu_sig2 <- NULL
+diff_wCu_with_anno2 <- merge(diff_wCu_with_anno2,
+                            Anno,
+                            by = "V1",
+                            all.x = TRUE)
+
+# woCu
+dds_res_woCu_sig_w_description$V1 <- rownames(dds_res_woCu_sig_w_description) # Normal DESeq
+woCu2_sig_w_description$V1 <- rownames(woCu2_sig_w_description) # "Chamber-Effect"
+
+## woCu1
+diff_woCu_sig <- setdiff(dds_res_woCu_sig_w_description$V1, woCu2_sig_w_description$V1)
+diff_woCu_with_anno <- as.data.frame(diff_woCu_sig)
+diff_woCu_with_anno$V1 <- diff_woCu_with_anno$diff_woCu_sig
+diff_woCu_with_anno$diff_woCu_sig <- NULL
+diff_woCu_with_anno <- merge(diff_woCu_with_anno,
+                            Anno,
+                            by = "V1",
+                            all.x = TRUE)
+
+## woCu2
+diff_woCu_sig2 <- setdiff(woCu2_sig_w_description$V1, dds_res_woCu_sig_w_description$V1)
+diff_woCu_with_anno2 <- as.data.frame(diff_woCu_sig2)
+diff_woCu_with_anno2$V1 <- diff_woCu_with_anno2$diff_woCu_sig2
+diff_woCu_with_anno2$diff_woCu_sig2 <- NULL
+diff_woCu_with_anno2 <- merge(diff_woCu_with_anno2,
+                             Anno,
+                             by = "V1",
+                             all.x = TRUE)
+
+
+# use TPM for that!
+
+#WT
+WT_counts <- TPM[1:6]
+WT_counts$V1 <- rownames(WT_counts)
+
+diff_WT_with_anno_and_counts <- merge(diff_WT_with_anno,
+                                      WT_counts,
+                                      by = "V1")
+
+diff_WT_with_anno_and_counts2 <- merge(diff_WT_with_anno2,
+                                       WT_counts,
+                                       by = "V1")
+
+
+#wCu
+wCu_counts <- TPM[c(1, 2, 3, 7, 8, 9)]
+wCu_counts$V1 <- rownames(wCu_counts)
+
+diff_wCu_with_anno_and_counts <- merge(diff_wCu_with_anno,
+                                      wCu_counts,
+                                      by = "V1")
+
+diff_wCu_with_anno_and_counts2 <- merge(diff_wCu_with_anno2,
+                                       wCu_counts,
+                                       by = "V1")
+
+#woCu
+woCu_counts <- TPM[c(4,5,6,10,11,12)]
+woCu_counts$V1 <- rownames(woCu_counts)
+
+diff_woCu_with_anno_and_counts <- merge(diff_woCu_with_anno,
+                                      woCu_counts,
+                                      by = "V1")
+
+diff_woCu_with_anno_and_counts2 <- merge(diff_woCu_with_anno2,
+                                       woCu_counts,
+                                       by = "V1")
+
+#MT
+MT_counts <- TPM[7:12]
+MT_counts$V1 <- rownames(MT_counts)
+
+diff_MT_with_anno_and_counts <- merge(diff_MT_with_anno,
+                                       MT_counts,
+                                       by = "V1")
+
+diff_MT_with_anno_and_counts2 <- merge(diff_MT_with_anno2,
+                                      MT_counts,
+                                      by = "V1")
+
+```
+
+
+
+# 5: Fisher exact
+##Counts of significant genes
+
+```{r}
+
+RawCounts$V1 <- row.names(RawCounts)
+
+# MT
+
+dds_res_MT_int_sig_names <- as.data.frame(rownames(dds_res_MT_int_sig))
+dds_res_MT_int_sig_names$V1 <- dds_res_MT_int_sig_names$`rownames(dds_res_MT_int_sig)`
+dds_res_MT_int_sig_names$`rownames(dds_res_MT_int_sig)` <- NULL
+dds_res_MT_int_sig_counts <- merge(dds_res_MT_int_sig_names,
+                                   RawCounts,
+                                   by= "V1")
+rownames(dds_res_MT_int_sig_counts) <- dds_res_MT_int_sig_counts$V1
+dds_res_MT_int_sig_counts$V1 <- NULL
+rm(dds_res_MT_int_sig_names)
+#write.table(dds_res_MT_int_sig_counts, file = "/home/mkrause/Marcus/Von Server/Counts/Graphs/Results/Significant/Counts/MT.txt", sep = "\t")
+
+# WT
+
+dds_res_WT_int_sig_names <- as.data.frame(rownames(dds_res_WT_int_sig))
+dds_res_WT_int_sig_names$V1 <- dds_res_WT_int_sig_names$`rownames(dds_res_WT_int_sig)`
+dds_res_WT_int_sig_names$`rownames(dds_res_WT_int_sig)` <- NULL
+dds_res_WT_int_sig_counts <- merge(dds_res_WT_int_sig_names,
+                                   RawCounts,
+                                   by= "V1")
+rownames(dds_res_WT_int_sig_counts) <- dds_res_WT_int_sig_counts$V1
+dds_res_WT_int_sig_counts$V1 <- NULL
+rm(dds_res_WT_int_sig_names)
+#write.table(dds_res_WT_int_sig_counts, file = "/home/mkrause/Marcus/Von Server/Counts/Graphs/Results/Significant/Counts/WT.txt", sep = "\t")
+
+# woCu
+
+dds_res_woCu_sig_names <- as.data.frame(rownames(dds_res_woCu_sig))
+dds_res_woCu_sig_names$V1 <- dds_res_woCu_sig_names$`rownames(dds_res_woCu_sig)`
+dds_res_woCu_sig_names$`rownames(dds_res_woCu_sig)` <- NULL
+dds_res_woCu_sig_counts <- merge(dds_res_woCu_sig_names,
+                                   RawCounts,
+                                   by= "V1")
+rownames(dds_res_woCu_sig_counts) <- dds_res_woCu_sig_counts$V1
+dds_res_woCu_sig_counts$V1 <- NULL
+rm(dds_res_woCu_sig_names)
+#write.table(dds_res_woCu_sig_counts, file = "/home/mkrause/Marcus/Von Server/Counts/Graphs/Results/Significant/Counts/woCu.txt", sep = "\t")
+
+# wCu
+
+dds_res_wCu_sig_names <- as.data.frame(rownames(dds_res_wCu_sig))
+dds_res_wCu_sig_names$V1 <- dds_res_wCu_sig_names$`rownames(dds_res_wCu_sig)`
+dds_res_wCu_sig_names$`rownames(dds_res_wCu_sig)` <- NULL
+dds_res_wCu_sig_counts <- merge(dds_res_wCu_sig_names,
+                                   RawCounts,
+                                   by= "V1")
+rownames(dds_res_wCu_sig_counts) <- dds_res_wCu_sig_counts$V1
+dds_res_wCu_sig_counts$V1 <- NULL
+rm(dds_res_wCu_sig_names)
+#write.table(dds_res_wCu_sig_counts, file = "/home/mkrause/Marcus/Von Server/Counts/Graphs/Results/Significant/Counts/wCu.txt", sep = "\t")
+
+row.names(RawCounts) <- RawCounts$V1
+RawCounts$V1 <- NULL
+
+
+```
+## Prep 4 fisher
+```{r}
+mtval <- merge(dds_res_MT_int_sig, dds_res_MT_int_sig_counts, by=0, all.x = T)
+#write.table(mtval, file = "/home/mkrause/Marcus/Von Server/Counts/Graphs/Results/Significant/Counts/MTval.txt", row.names = F, col.names = T, sep = "\t")
+
+wtval <- merge(dds_res_WT_int_sig, dds_res_WT_int_sig_counts, by=0, all.x = T)
+#write.table(wtval, file = "/home/mkrause/Marcus/Von Server/Counts/Graphs/Results/Significant/Counts/WTval.txt", row.names = F, col.names = T, sep = "\t")
+
+wcuval <- merge(dds_res_wCu_sig, dds_res_wCu_sig_counts, by=0, all.x = T)
+#write.table(wCuval, file = "/home/mkrause/Marcus/Von Server/Counts/Graphs/Results/Significant/Counts/wCuval.txt", row.names = F, col.names = T, sep = "\t")
+
+wocuval <- merge(dds_res_woCu_sig, dds_res_woCu_sig_counts, by=0, all.x = T)
+#write.table(woCuval, file = "/home/mkrause/Marcus/Von Server/Counts/Graphs/Results/Significant/Counts/woCuval.txt", row.names = F, col.names = T, sep = "\t")
+
+```
+## 5: Cutting and Subsetting
+
+```{r}
+
+ ##Filtering by TPM Threshold
+Cut1 <- AS1[AS1$WTwCu_R1 >= 2.3,]  #18717
+Cut1 <- AS1[AS1$WTwCu_R1 >= 3.03,] #18419
+Cut2 <- AS2[AS2$WTwoCu_R1 >= 3.03,]
+Cut3 <- AS3[AS3$WTwCu_R2 >= 3.03,]
+Cut4 <- AS4[AS4$WTwoCu_R2 >= 3.03,]
+Cut5 <- AS5[AS5$WTwCu_R3 >= 3.03,]
+Cut6 <- AS6[AS6$WTwoCu_R3 >= 3.03,]
+Cut7 <- AS7[AS7$spl7wCu_R1 >= 3.03,]
+Cut8 <- AS8[AS8$spl7woCu_R1 >= 3.03,]
+Cut9 <- AS9[AS9$spl7wCu_R2 >= 3.03,]
+Cut10 <- AS10[AS10$spl7woCu_R2 >= 3.03,]
+Cut11 <- AS11[AS11$spl7wCu_R3 >= 3.03,]
+Cut12 <- AS12[AS12$spl7woCu_R3 >= 3.03,]
+
+TCut_WTwCu <- TPMn[TPMn$WTwCu_R1 >= 3.03,]
+TCut_WTwCu <- TCut_WTwCu[TCut_WTwCu$WTwCu_R2 >= 3.03,]
+TCut_WTwCu <- TCut_WTwCu[TCut_WTwCu$WTwCu_R3 >= 3.03,]
+
+
+Cut_WTwCu <- merge(Cut1,Cut3,all=T,by="V1")
+Cut_WTwCu <- merge(Cut_WTwCu,Cut5,all=T,by="V1")
+
+Cut_WTwoCu <- merge(Cut2,Cut4,all=T,by="V1")
+Cut_WTwoCu <- merge(Cut_WTwoCu,Cut6,all=T,by="V1")
+
+Cut_MTwCu <- merge(Cut7,Cut9,all=T,by="V1")
+Cut_MTwCu <- merge(Cut_MTwCu,Cut11,all=T,by="V1")
+
+Cut_MTwoCu <- merge(Cut8,Cut10,all=T,by="V1")
+Cut_MTwoCu <- merge(Cut_MTwoCu,Cut12,all=T,by="V1")
+
+Cut_all <- merge(Cut_WTwCu,Cut_WTwoCu,all=T,by="V1")
+Cut_all <- merge(Cut_all,Cut_MTwCu,all=T,by="V1")
+Cut_all <- merge(Cut_all,Cut_MTwoCu,all=T,by="V1")
+
+rownames(Cut_WTwCu) <- Cut_WTwCu$V1
+Cut_WTwCu$V1 <- NULL
+rownames(Cut_WTwoCu) <- Cut_WTwoCu$V1
+Cut_WTwoCu$V1 <- NULL
+rownames(Cut_MTwCu) <- Cut_MTwCu$V1
+Cut_MTwCu$V1 <- NULL
+rownames(Cut_MTwoCu) <- Cut_MTwoCu$V1
+Cut_MTwoCu$V1 <- NULL
+rownames(Cut_all) <- Cut_all$V1
+Cut_all$V1 <- NULL
+
+
+rm(list = c("Cut1","Cut2","Cut3","Cut4","Cut5","Cut6","Cut7","Cut8","Cut9","Cut10","Cut11","Cut12"))
+
+Cut_all$One <- 1
+Cut_sub_all <- subset.data.frame(Cut_all, select = c( 0, One ))
+write.table(Cut_sub_all,file = "/home/mkrause/MapMan/All.txt", sep = "\t", row.names = T, col.names = T)
+CPM_threshold <- cpm(Cut_all) ##NAs are a problem here
+
+###Upregulated
+
+MT_upregulated <- subset.data.frame(mtval, log2FoldChange > 1)
+MT_up_lfc <- subset.data.frame(MT_upregulated, select = c("Row.names", "log2FoldChange"))
+#write.table(MT_up_lfc, file = "/home/mkrause/MapMan/mt_up_lfc.txt", sep = "\t", row.names = F, col.names = T)
+
+WT_upregulated <- subset.data.frame(wtval, log2FoldChange > 1)
+WT_up_lfc <- subset.data.frame(WT_upregulated, select = c("Row.names", "log2FoldChange"))
+#write.table(WT_up_lfc, file = "/home/mkrause/MapMan/wt_up_lfc.txt", sep = "\t", row.names = F, col.names = T)
+
+wCu_upregulated <- subset.data.frame(wcuval, log2FoldChange >1)
+wCu_up_lfc <- subset.data.frame(wCu_upregulated, select = c("Row.names", "log2FoldChange"))
+#write.table(wCu_up_lfc, file = "/home/mkrause/MapMan/wcu_up_lfc.txt", sep = "\t", row.names = F, col.names = T)
+
+woCu_upregulated <- subset.data.frame(wocuval, log2FoldChange >1)
+woCu_up_lfc <- subset.data.frame(woCu_upregulated, select = c("Row.names", "log2FoldChange"))
+#write.table(woCu_up_lfc, file = "/home/mkrause/MapMan/wocu_up_lfc.txt", sep = "\t", row.names = F, col.names = T)
+
+###Downregulated
+
+MT_downregulated <- subset.data.frame(mtval, log2FoldChange < -1)
+MT_down_lfc <- subset.data.frame(MT_downregulated, select = c("Row.names", "log2FoldChange"))
+#write.table(MT_down_lfc, file = "/home/mkrause/MapMan/mt_down_lfc.txt", sep = "\t", row.names = F, col.names = T)
+WT_downregulated <- subset.data.frame(wtval, log2FoldChange < -1)
+WT_down_lfc <- subset.data.frame(WT_downregulated, select = c("Row.names", "log2FoldChange"))
+#write.table(WT_down_lfc, file = "/home/mkrause/MapMan/wt_down_lfc.txt", sep = "\t", row.names = F, col.names = T)
+wCu_downregulated <- subset.data.frame(wcuval, log2FoldChange < -1)
+wCu_down_lfc <- subset.data.frame(wCu_downregulated, select = c("Row.names", "log2FoldChange"))
+#write.table(wCu_down_lfc, file = "/home/mkrause/MapMan/wcu_down_lfc.txt", sep = "\t", row.names = F, col.names = T)
+woCu_downregulated <- subset.data.frame(wocuval, log2FoldChange < -1)
+woCu_down_lfc <- subset.data.frame(woCu_downregulated, select = c("Row.names", "log2FoldChange"))
+#write.table(woCu_down_lfc, file = "/home/mkrause/MapMan/wocu_down_lfc.txt", sep = "\t", row.names = F, col.names = T)
+
+
+
+
+```
+
+
+## Calculation
+
+```{r}
+setwd("/home/mkrause/MapMan/Results")
+
+## MapMan output for ALL expressed genes (cpm threshold)
+All_Mapman<-read.delim("/home/mkrause/MapMan/Results/All-bins.txt",header=T)
+
+
+
+
+############################################### Up
+
+#Mapman input files to get input gene dataset because of overlap between categories
+##Add Input for MapMan
+MT_up_n<-nrow(read.table("/home/mkrause/MapMan/mt_up_lfc.txt",sep="\t",header=T))
+WT_up_n<-nrow(read.table("/home/mkrause/MapMan/wt_up_lfc.txt",sep="\t",header=T))
+wCu_up_n<-nrow(read.table("/home/mkrause/MapMan/wcu_up_lfc.txt",sep="\t",header=T))
+woCu_up_n<-nrow(read.table("/home/mkrause/MapMan/wocu_up_lfc.txt",sep="\t",header=T))
+
+###Add cpm threshold blah blah ?????????????????????????????????????????????????????
+All_n<-nrow(Cut_all)
+
+## Add MapMan output
+MT_up_Mapman<-read.delim("/home/mkrause/MapMan/Results/Up/MT-bins.txt",header=T)
+WT_up_Mapman<-read.delim("/home/mkrause/MapMan/Results/Up/WT-bins.txt",header=T)
+wCu_up_Mapman<-read.delim("/home/mkrause/MapMan/Results/Up/wCu-bins.txt",header=T)
+woCu_up_Mapman<-read.delim("/home/mkrause/MapMan/Results/Up/woCu-bins.txt",header=T)
+
+
+#only categories with full number (not dot something)
+MT_up<-MT_up_Mapman[MT_up_Mapman$bin %in% 1:38,]
+MT_up_sort <- MT_up[order(MT_up$bin),]
+MT_up <- droplevels(MT_up_sort)
+WT_up<-WT_up_Mapman[WT_up_Mapman$bin %in% 1:38,]
+WT_up_sort <- WT_up[order(WT_up$bin),]
+WT_up <-droplevels(WT_up_sort)
+wCu_up<-wCu_up_Mapman[wCu_up_Mapman$bin %in% 1:38,]
+wCu_up_sort <- wCu_up[order(wCu_up$bin),]
+wCu_up<-droplevels(wCu_up_sort)
+woCu_up<-woCu_up_Mapman[woCu_up_Mapman$bin %in% 1:38,]
+woCu_up_sort <- woCu_up[order(woCu_up$bin),]
+woCu_up<-droplevels(woCu_up_sort)
+All<-All_Mapman[All_Mapman$bin %in% 1:38,]
+All_sort <- All[order(All$bin),]
+All<-droplevels(All_sort)
+
+####in case of merge p.value within fields
+
+
+
+## MT_up
+x=MT_up[,1:3]
+x[,3]<-as.numeric(as.character(x[,3]))
+
+y=All
+y[,3]<-as.numeric(as.character(y[,3]))
+
+dat <- matrix(NA, 2,2)
+Fold_enrichment=c()
+p.value <- c()
+for (i in levels(x$bin)) 
+{  
+  dat[1,1] <- x$elements[x$bin==i]
+  dat[1,2] <- MT_up_n-dat[1,1]
+  dat[2,1] <- y$elements[y$bin==i]-dat[1,1]
+  dat[2,2] <- All_n-y$elements[y$bin==i]-dat[1,2]
+
+  fit <- fisher.test(dat,alternative="greater")#greater for overrepresentation
+  p.value <- rbind(p.value,fit$p.value)
+  Fold_enrichment=rbind(Fold_enrichment,(dat[1,1]/(MT_up_n))/(dat[2,1]/All_n))
+}
+
+MT_up_fisher <- cbind(x, p.value,Fold_enrichment) 
+write.table(MT_up_fisher, "MT_up_fisher.txt",sep="\t",row.names=F,quote=F)
+MT_up_fisher$q_value<-qvalue(MT_up_fisher$p.value)$qvalues
+MT_up_fisher_sig<-MT_up_fisher[MT_up_fisher$q_value<=0.05,]
+write.table(MT_up_fisher_sig, "MT_up_fisher_sig.txt",sep="\t",row.names=F,quote=F)
+
+
+
+
+## WT_up
+x=WT_up[,1:3]
+x[,3] <- as.numeric(as.character(x[,3]))
+y=All
+y[,3] <- as.numeric(as.character(y[,3]))
+
+dat <- matrix(NA, 2,2)
+Fold_enrichment=c()
+p.value <- c()
+for (i in levels(x$bin)) 
+{  
+  dat[1,1] <- x$elements[x$bin==i]
+  dat[1,2] <- WT_up_n-dat[1,1]
+  dat[2,1] <- y$elements[y$bin==i]-dat[1,1]
+  dat[2,2] <- All_n-y$elements[y$bin==i]-dat[1,2]
+  fit <- fisher.test(dat,alternative="greater")#greater for overrepresentation
+  p.value <- rbind(p.value,fit$p.value)
+  Fold_enrichment=rbind(Fold_enrichment,(dat[1,1]/(WT_up_n))/(dat[2,1]/All_n))
+}
+
+WT_up_fisher <- cbind(x, p.value,Fold_enrichment)
+write.table(WT_up_fisher, "WT_up_fisher.txt",sep="\t",row.names=F,quote=F)
+WT_up_fisher$q_value<-qvalue(WT_up_fisher$p.value)$qvalues
+WT_up_fisher_sig<-WT_up_fisher[WT_up_fisher$q_value<=0.05,]
+write.table(WT_up_fisher_sig, "WT_up_fisher_sig.txt",sep="\t",row.names=F,quote=F)
+
+
+
+### wCu_up
+x=wCu_up[,1:3]
+x[,3]<-as.numeric(as.character(x[,3]))
+y=All
+y[,3]<-as.numeric(as.character(y[,3]))
+
+dat <- matrix(NA, 2,2)
+Fold_enrichment=c()
+p.value <- c()
+for (i in levels(x$bin)) 
+{  
+  dat[1,1] <- x$elements[x$bin==i]
+  dat[1,2] <- wCu_up_n-dat[1,1]
+  dat[2,1] <- y$elements[y$bin==i]-dat[1,1]
+  dat[2,2] <- All_n-y$elements[y$bin==i]-dat[1,2]
+  
+  fit <- fisher.test(dat,alternative="greater")#greater for overrepresentation
+  p.value <- rbind(p.value,fit$p.value)
+  Fold_enrichment=rbind(Fold_enrichment,(dat[1,1]/(wCu_up_n))/(dat[2,1]/All_n))
+}
+
+wCu_up_fisher <- cbind(x, p.value,Fold_enrichment)
+write.table(wCu_up_fisher, "wCu_up_fisher.txt",sep="\t",row.names=F,quote=F)
+wCu_up_fisher$q_value<-qvalue(wCu_up_fisher$p.value)$qvalues
+wCu_up_fisher_sig<-wCu_up_fisher[wCu_up_fisher$q_value<=0.05,]
+write.table(wCu_up_fisher_sig, "wCu_up_fisher_sig.txt",sep="\t",row.names=F,quote=F)
+
+
+
+## woCu_up
+x=woCu_up[,1:3]
+x[,3]<-as.numeric(as.character(x[,3]))
+y=All
+y[,3]<-as.numeric(as.character(y[,3]))
+
+dat <- matrix(NA, 2,2)
+Fold_enrichment=c()
+p.value <- c()
+for (i in levels(x$bin)) 
+{  
+  dat[1,1] <- x$elements[x$bin==i]
+  dat[1,2] <- woCu_up_n-dat[1,1]
+  dat[2,1] <- y$elements[y$bin==i]-dat[1,1]
+  dat[2,2] <- All_n-y$elements[y$bin==i]-dat[1,2]
+  
+  fit <- fisher.test(dat,alternative="greater")#greater for overrepresentation
+  p.value <- rbind(p.value,fit$p.value)
+  Fold_enrichment=rbind(Fold_enrichment,(dat[1,1]/(woCu_up_n))/(dat[2,1]/All_n))
+}
+
+woCu_up_fisher <- cbind(x, p.value,Fold_enrichment) 
+write.table(woCu_up_fisher, "woCu_up_fisher.txt",sep="\t",row.names=F,quote=F)
+woCu_up_fisher$q_value<-qvalue(woCu_up_fisher$p.value)$qvalues
+woCu_up_fisher_sig<-woCu_up_fisher[woCu_up_fisher$q_value<=0.05,]
+write.table(woCu_up_fisher_sig, "woCu_up_fisher_sig.txt",sep="\t",row.names=F,quote=F)
+
+############################################################### Down
+
+
+##Add Input for MapMan
+MT_down_n<-nrow(read.table("/home/mkrause/MapMan/mt_down_lfc.txt",sep="\t",header=T))
+WT_down_n<-nrow(read.table("/home/mkrause/MapMan/wt_down_lfc.txt",sep="\t",header=T))
+wCu_down_n<-nrow(read.table("/home/mkrause/MapMan/wcu_down_lfc.txt",sep="\t",header=T))
+woCu_down_n<-nrow(read.table("/home/mkrause/MapMan/wocu_down_lfc.txt",sep="\t",header=T))
+
+###Add cpm threshold blah blah ?????????????????????????????????????????????????????
+All_n<-nrow(Cut_all)
+
+## Add MapMan output
+MT_down_Mapman<-read.delim("/home/mkrause/MapMan/Results/Down/MT-bins.txt",header=T)
+WT_down_Mapman<-read.delim("/home/mkrause/MapMan/Results/Down/WT-bins.txt",header=T)
+wCu_down_Mapman<-read.delim("/home/mkrause/MapMan/Results/Down/wCu-bins.txt",header=T)
+woCu_down_Mapman<-read.delim("/home/mkrause/MapMan/Results/Down/woCu-bins.txt",header=T)
+
+#only categories with full number (not dot something)
+MT_down<-MT_down_Mapman[MT_down_Mapman$bin %in% 1:38,]
+MT_down_sort <- MT_down[order(MT_down$bin),]
+MT_down <- droplevels(MT_down_sort)
+WT_down<-WT_down_Mapman[WT_down_Mapman$bin %in% 1:38,]
+WT_down_sort <- WT_down[order(WT_down$bin),]
+WT_down <-droplevels(WT_down_sort)
+wCu_down<-wCu_down_Mapman[wCu_down_Mapman$bin %in% 1:38,]
+wCu_down_sort <- wCu_down[order(wCu_down$bin),]
+wCu_down<-droplevels(wCu_down_sort)
+woCu_down<-woCu_down_Mapman[woCu_down_Mapman$bin %in% 1:38,]
+woCu_down_sort <- woCu_down[order(woCu_down$bin),]
+woCu_down<-droplevels(woCu_down_sort)
+All<-All_Mapman[All_Mapman$bin %in% 1:38,]
+All_sort <- All[order(All$bin),]
+All<-droplevels(All_sort)
+
+## MT_down
+x=MT_down[,1:3]
+x[,3]<-as.numeric(as.character(x[,3]))
+
+y=All
+y[,3]<-as.numeric(as.character(y[,3]))
+
+dat <- matrix(NA, 2,2)
+Fold_enrichment=c()
+p.value <- c()
+for (i in levels(x$bin)) 
+{  
+  dat[1,1] <- x$elements[x$bin==i]
+  dat[1,2] <- MT_down_n-dat[1,1]
+  dat[2,1] <- y$elements[y$bin==i]-dat[1,1]
+  dat[2,2] <- All_n-y$elements[y$bin==i]-dat[1,2]
+  
+  fit <- fisher.test(dat,alternative="greater")#greater for overrepresentation
+  p.value <- rbind(p.value,fit$p.value)
+  Fold_enrichment=rbind(Fold_enrichment,(dat[1,1]/(MT_down_n))/(dat[2,1]/All_n))
+}
+
+MT_down_fisher <- cbind(x, p.value,Fold_enrichment) 
+write.table(MT_down_fisher, "MT_down_fisher.txt",sep="\t",row.names=F,quote=F)
+MT_down_fisher$q_value<-qvalue(MT_down_fisher$p.value)$qvalues
+MT_down_fisher_sig<-MT_down_fisher[MT_down_fisher$q_value<=0.05,]
+write.table(MT_down_fisher_sig, "MT_down_fisher_sig.txt",sep="\t",row.names=F,quote=F)
+
+
+
+## WT_down
+x=WT_down[,1:3]
+x[,3]<-as.numeric(as.character(x[,3]))
+y=All
+y[,3]<-as.numeric(as.character(y[,3]))
+
+dat <- matrix(NA, 2,2)
+Fold_enrichment=c()
+p.value <- c()
+for (i in levels(x$bin)) 
+{  
+  dat[1,1] <- x$elements[x$bin==i]
+  dat[1,2] <- WT_down_n-dat[1,1]
+  dat[2,1] <- y$elements[y$bin==i]-dat[1,1]
+  dat[2,2] <- All_n-y$elements[y$bin==i]-dat[1,2]
+  
+  fit <- fisher.test(dat,alternative="greater")#greater for overrepresentation
+  p.value <- rbind(p.value,fit$p.value)
+  Fold_enrichment=rbind(Fold_enrichment,(dat[1,1]/(WT_down_n))/(dat[2,1]/All_n))
+}
+
+WT_down_fisher <- cbind(x, p.value,Fold_enrichment) 
+write.table(WT_down_fisher, "WT_down_fisher.txt",sep="\t",row.names=F,quote=F)
+WT_down_fisher$q_value<-qvalue(WT_down_fisher$p.value)$qvalues
+WT_down_fisher_sig<-WT_down_fisher[WT_down_fisher$q_value<=0.05,]
+write.table(WT_down_fisher_sig, "WT_down_fisher_sig.txt",sep="\t",row.names=F,quote=F)
+
+
+
+### wCu_down
+x=wCu_down[,1:3]
+x[,3]<-as.numeric(as.character(x[,3]))
+y=All
+y[,3]<-as.numeric(as.character(y[,3]))
+
+dat <- matrix(NA, 2,2)
+Fold_enrichment=c()
+p.value <- c()
+for (i in levels(x$bin)) 
+{  
+  dat[1,1] <- x$elements[x$bin==i]
+  dat[1,2] <- wCu_down_n-dat[1,1]
+  dat[2,1] <- y$elements[y$bin==i]-dat[1,1]
+  dat[2,2] <- All_n-y$elements[y$bin==i]-dat[1,2]
+  
+  fit <- fisher.test(dat,alternative="greater")#greater for overrepresentation
+  p.value <- rbind(p.value,fit$p.value)
+  Fold_enrichment=rbind(Fold_enrichment,(dat[1,1]/(wCu_down_n))/(dat[2,1]/All_n))
+}
+
+wCu_down_fisher <- cbind(x, p.value,Fold_enrichment) 
+write.table(wCu_down_fisher, "wCu_down_fisher.txt",sep="\t",row.names=F,quote=F)
+wCu_down_fisher$q_value<-qvalue(wCu_down_fisher$p.value)$qvalues
+wCu_down_fisher_sig<-wCu_down_fisher[wCu_down_fisher$q_value<=0.05,]
+write.table(wCu_down_fisher_sig, "wCu_down_fisher_sig.txt",sep="\t",row.names=F,quote=F)
+
+
+
+## woCu_down
+x=woCu_down[,1:3]
+x[,3]<-as.numeric(as.character(x[,3]))
+y=All
+y[,3]<-as.numeric(as.character(y[,3]))
+
+dat <- matrix(NA, 2,2)
+Fold_enrichment=c()
+p.value <- c()
+for (i in levels(x$bin)) 
+{  
+  dat[1,1] <- x$elements[x$bin==i]
+  dat[1,2] <- woCu_down_n-dat[1,1]
+  dat[2,1] <- y$elements[y$bin==i]-dat[1,1]
+  dat[2,2] <- All_n-y$elements[y$bin==i]-dat[1,2]
+  
+  fit <- fisher.test(dat,alternative="greater")#greater for overrepresentation
+  p.value <- rbind(p.value,fit$p.value)
+  Fold_enrichment=rbind(Fold_enrichment,(dat[1,1]/(woCu_down_n))/(dat[2,1]/All_n))
+}
+
+woCu_down_fisher <- cbind(x, p.value,Fold_enrichment) 
+write.table(woCu_down_fisher, "woCu_down_fisher.txt",sep="\t",row.names=F,quote=F)
+woCu_down_fisher$q_value<-qvalue(woCu_down_fisher$p.value)$qvalues
+woCu_down_fisher_sig<-woCu_down_fisher[woCu_down_fisher$q_value<=0.05,]
+write.table(woCu_down_fisher_sig, "woCu_down_fisher_sig.txt",sep="\t",row.names=F,quote=F)
+
+###############################################################
+
+
+#### Plots
+bpWT_up_fisher_sig<-barplot(sort(WT_up_fisher_sig$Fold_enrichment),las=3,width=1.2)
+bpMT_up_fisher_sig<-barplot(sort(MT_up_fisher_sig$Fold_enrichment),las=3,width=1.2)
+```
+
+# 6: Universal Data Set
+```{r}
+TPM$V1 <- row.names(TPM)
+RawTPM <- merge(RawCountsN,TPM, by= "V1")
+CPMone <- as.data.frame(CPM)
+CPMone$V1 <- row.names(CPMone)
+#row.names(CPM) <- NULL
+RawTPMCPM <- merge(RawTPM, CPMone, by="V1")
+df_MT <- as.data.frame(MT_N)
+df_WT <- as.data.frame(WT_N)
+df_wCu <- as.data.frame(MT_vs_WT_w_Cu_N)
+df_woCu <- as.data.frame(MT_vs_WT_wo_Cu_N)
+
+NewNameRawTPMCPM <- RawTPMCPM %>% 
+  rename(
+    WTwCu_R1_CPM = WTwCu_R1.y,
+    WTwCu_R2_CPM = WTwCu_R2.y,
+    WTwCu_R3_CPM = WTwCu_R3.y,
+    WTwoCu_R1_CPM = WTwoCu_R1.y,
+    WTwoCu_R2_CPM = WTwoCu_R2.y,
+    WTwoCu_R3_CPM = WTwoCu_R3.y,
+    MTwCu_R1_CPM = spl7wCu_R1.y,
+    MTwCu_R2_CPM = spl7wCu_R2.y,
+    MTwCu_R3_CPM = spl7wCu_R3.y,
+    MTwoCu_R1_CPM = spl7woCu_R1.y,
+    MTwoCu_R2_CPM = spl7woCu_R2.y,
+    MTwoCu_R3_CPM = spl7woCu_R3.y,
+    WTwCu_R1_Raw = WTwCu_R1.x,
+    WTwCu_R2_Raw = WTwCu_R2.x,
+    WTwCu_R3_Raw = WTwCu_R3.x,
+    WTwoCu_R1_Raw = WTwoCu_R1.x,
+    WTwoCu_R2_Raw = WTwoCu_R2.x,
+    WTwoCu_R3_Raw = WTwoCu_R3.x,
+    MTwCu_R1_Raw = spl7wCu_R1.x,
+    MTwCu_R2_Raw = spl7wCu_R2.x,
+    MTwCu_R3_Raw = spl7wCu_R3.x,
+    MTwoCu_R1_Raw = spl7woCu_R1.x,
+    MTwoCu_R2_Raw = spl7woCu_R2.x,
+    MTwoCu_R3_Raw = spl7woCu_R3.x,
+    MTwCu_R1_TPM = spl7wCu_R1_TPM,
+    MTwCu_R2_TPM = spl7wCu_R2_TPM,
+    MTwCu_R3_TPM = spl7wCu_R3_TPM,
+    MTwoCu_R1_TPM = spl7woCu_R1_TPM,
+    MTwoCu_R2_TPM = spl7woCu_R2_TPM,
+    MTwoCu_R3_TPM = spl7woCu_R3_TPM,
+  )
+
+df_MT$V1 <- row.names(df_MT)
+mdf_MT <- df_MT[,c(2,3,5,6,7)]
+nndf_MT <- mdf_MT %>% 
+  rename(
+    MTwoCu_vs_MTwCu_log2FoldChange = log2FoldChange,
+    MTwoCu_vs_MTwCu_lfcSE = lfcSE,
+    MTwoCu_vs_MTwCu_pvalue = pvalue,
+    MTwoCu_vs_MTwCu_padj = padj,
+  )
+
+df_WT$V1 <- row.names(df_WT)
+mdf_WT <- df_WT[,c(2,3,5,6,7)]
+nndf_WT <- mdf_WT %>% 
+  rename(
+    WTwoCu_vs_WTwCu_log2FoldChange = log2FoldChange,
+    WTwoCu_vs_WTwCu_lfcSE = lfcSE,
+    WTwoCu_vs_WTwCu_pvalue = pvalue,
+    WTwoCu_vs_WTwCu_padj = padj,
+  )
+
+df_wCu$V1 <- row.names(df_wCu)
+mdf_wCu <- df_wCu[,c(2,3,5,6,7)]
+nndf_wCu <- mdf_wCu %>% 
+  rename(
+    MTwCu_vs_WTwCu_log2FoldChange = log2FoldChange,
+    MTwCu_vs_WTwCu_lfcSE = lfcSE,
+    MTwCu_vs_WTwCu_pvalue = pvalue,
+    MTwCu_vs_WTwCu_padj = padj,
+  )
+
+df_woCu$V1 <- row.names(df_woCu)
+mdf_woCu <- df_woCu[,c(2,3,5,6,7)]
+nndf_woCu <- mdf_woCu %>% 
+  rename(
+    MTwoCu_vs_WTwoCu_log2FoldChange = log2FoldChange,
+    MTwoCu_vs_WTwoCu_lfcSE = lfcSE,
+    MTwoCu_vs_WTwoCu_pvalue = pvalue,
+    MTwoCu_vs_WTwoCu_padj = padj,
+  )
+
+#Mapman_table <- read.table("/home/mkrause/MapMan/Data/mappings/MAPMAN_Ath_AGI_LOCUS_TAIR10_Edit_UTF-8_trimm.csv", header = T, sep = "\t", na.strings = "NA")
+#MM_table <- Mapman_table %>%
+#  rename(
+ #   V1 = IDENTIFIER,
+  #  MapMan_BIN = NAME,
+   # MapMan_Description = DESCRIPTION,
+  #)
+
+
+Anno <- read.delim("/Volumes/JARVIS-X/PostDoc/Plant_Genomic_Ressources/00 Functional Description for paper/TAIR10_functional_descriptions_for_Meetings_Mapman_strict_genes_202008_03_bHLHadded.txt", header = T)
+names(Anno)[1] <- "V1"
+head(Anno)
+
+RawTPMCPMWT <- merge(NewNameRawTPMCPM, nndf_WT, all=T, by="V1")
+RawTPMCPMWTMT <- merge(RawTPMCPMWT, nndf_MT, all=T, by="V1")
+RawTPMCPMWTMTwCu <- merge(RawTPMCPMWTMT, nndf_wCu, all=T, by="V1")
+RawTPMCPMWTMTwCuwoCu <- merge(RawTPMCPMWTMTwCu, nndf_woCu, all=T, by="V1")
+#RawMapMan <- merge(RawTPMCPMWTMTwCuwoCu, MM_table, all.x=T,  by="V1")
+RawMapManAnno <- merge(RawTPMCPMWTMTwCuwoCu, Anno, all.x = T, by="V1") 
+
+
+
+write.table(RawMapManAnno, "/Volumes/JARVIS-X/PostDoc/Corona_Björn/SPL7 - Anna/Marcus/Von Server/Counts/BP_analysis/20200909UNIVERSAL_DATA_SET_MKBP.txt", sep = "\t", row.names = F)
+
+
+
+```
